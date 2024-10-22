@@ -1,3 +1,9 @@
+"""
+This module provides plotting functions for AnnData objects utilizing plotly.
+"""
+
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -311,8 +317,94 @@ def pca(adata: AnnData, *,
         annotate_var_explained: bool = True,
         **kwargs,
         ) -> go.Figure | None:
+    """
+    Scatter plot in PCA coordinates.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    annotate_var_explained : bool
+        Whether to annotate the explained variance on axis names
+    **kwargs
+        Additional keyword arguments passed to embedding.
+
+    Returns
+    -------
+    go.Figure | None
+        The figure object if return_fig is True, None otherwise.
+    """
     return embedding(adata, basis="pca", _pca_annotate_variances=annotate_var_explained, **kwargs)
 
 
 def umap(adata: AnnData, **kwargs):
+    """
+    Scatter plot in UMAP basis.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    **kwargs
+        Additional keyword arguments passed to embedding.
+
+    Returns
+    -------
+    go.Figure | None
+        The figure object if return_fig is True, None otherwise.
+    """
     embedding(adata, basis="umap", **kwargs)
+
+
+def save_fig(fig: go.Figure,
+             savepath: str | Path,
+             *,
+             dragmode: str = "pan",
+             margin: dict | None = None,
+             config: dict | None = None,
+             save_html: bool = True,
+             save_png: bool = True,
+             **kwargs) -> None:
+    """
+    Plot saving function with adjusted defaults.
+
+    Parameters
+    ----------
+    fig : go.Figure
+        Figure to save.
+    savepath : str | Path
+        Path where the figure should be saved. File extension will be added automatically
+        based on the output format(s).
+    dragmode : str
+        Plotly dragmode setting for the figure (e.g., 'pan', 'zoom', 'select').
+    margin : dict | None
+        Dictionary specifying plot margins. If None, defaults to
+        {"l": 30, "r": 30, "t": 30, "b": 30}.
+    config : dict | None
+        Plotly config dictionary. If None, defaults to
+        {"scrollZoom": True, "displaylogo": False}.
+    save_html : bool
+        If True, save the figure as an interactive HTML file.
+    save_png : bool
+        If True, save the figure as a static PNG file.
+    **kwargs
+        Additional keyword arguments passed to fig.write_html().
+
+    Returns
+    -------
+    None
+        Function saves the figure to disk and returns nothing.
+    """
+    savepath = Path(savepath)
+    if not margin:
+        margin = {"l": 30, "r": 30, "t": 30, "b": 30}
+    if not config:
+        config = {"scrollZoom": True, "displaylogo": False}
+
+    fig.update_layout(dragmode=dragmode, margin=margin)
+    if save_html:
+        fig.write_html(savepath.with_suffix(".html"),
+                       config=config,
+                       **kwargs)
+    if save_png:
+        fig.write_image(savepath.with_suffix(".png"))
