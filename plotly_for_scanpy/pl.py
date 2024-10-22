@@ -14,37 +14,17 @@ from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
 
 
-def _calc_qc_metrics(adata, mt_col, quantile):
-    """
-    Calculate QC metrics to plot.
-    """
-    counts_per_cell = adata.X.sum(axis=1).A.T[0]
-    genes_per_cell = (adata.X > 0).sum(axis=1).T.A[0]
-    if mt_col not in adata.var.columns:
-        adata.var[mt_col] = adata.var_names.str.startswith("MT-")
-    mito_counts = adata[:, adata.var[mt_col]].X.sum(axis=1).T.A[0]
-    mito_pct = mito_counts / counts_per_cell * 100
-
-    if quantile is not None:
-        counts_threshold = np.percentile(counts_per_cell, quantile * 100)
-        genes_threshold = np.percentile(genes_per_cell, quantile * 100)
-        mito_pct_threshold = np.percentile(mito_pct, quantile * 100)
-
-        counts_per_cell = counts_per_cell[counts_per_cell <= counts_threshold]
-        genes_per_cell = genes_per_cell[genes_per_cell <= genes_threshold]
-        mito_pct = mito_pct[mito_pct <= mito_pct_threshold]
-    return counts_per_cell, genes_per_cell, mito_pct
-
-
 def qc_metrics(
     adata: AnnData,
+    qc_vars: str | list | None = None,
+    ncols: int = 3,
+    *,
     width: int | None = None,
     height: int | None = None,
-    layout: str = "vertical",
     quantile: float = 1.0,
-    *,
     template: str | None = None,
-    mt_col: str = "mt",
+    horizontal_spacing: float = 0.075,
+    vertical_spacing: float = 0.1,
     return_fig: bool = False,
 ) -> go.Figure | None:
     """
@@ -76,40 +56,38 @@ def qc_metrics(
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
-    counts_per_cell, genes_per_cell, mito_pct = _calc_qc_metrics(adata, mt_col, quantile)
-
-    layout_err_msg = 'layout should be "vertical" or "horizontal"'
     if template is None:
         template = pio.templates.default
 
-    if layout not in ["vertical", "horizontal"]:
-        raise ValueError(layout_err_msg)
+    if qc_vars:
+        qc_vars = [qc_vars] if isinstance(qc_vars, str) else list(qc_vars)
 
-    if not width:
-        width = 1200 if layout == "horizontal" else None
-    if not height:
-        height = None if layout == "horizontal" else 1000
+    num_plots = 2 + len(qc_vars) if qc_vars else 2
+    cols = min(num_plots, ncols)
+    rows = int(np.ceil(num_plots / cols))
 
-    n_rows = 3 if layout == "vertical" else 1
-    n_cols = 1 if layout == "vertical" else 3
+    subplot_titles = (["N of UMI per cell", "N of genes per cell"] +
+                      [f"% of {qc_var} expression per cell" for qc_var in qc_vars] if qc_vars
+                      else ["N of UMI per cell", "N of genes per cell"])
 
-    fig = make_subplots(rows=n_rows, cols=n_cols, horizontal_spacing=0.075, vertical_spacing=0.1,
-                        subplot_titles=[
-                            "N of UMI per cell",
-                            "N of genes per cell",
-                            "% of mitochondrial expression per cell",
-                        ])
-    if layout == "vertical":
-        fig.add_trace(go.Histogram(x=counts_per_cell), row=1, col=1)
-        fig.add_trace(go.Histogram(x=genes_per_cell), row=2, col=1)
-        fig.add_trace(go.Histogram(x=mito_pct), row=3, col=1)
-    else:
-        fig.add_trace(go.Histogram(x=counts_per_cell), row=1, col=1)
-        fig.add_trace(go.Histogram(x=genes_per_cell), row=1, col=2)
-        fig.add_trace(go.Histogram(x=mito_pct), row=1, col=3)
+    fig = make_subplots(rows=rows, cols=cols,
+                        horizontal_spacing=horizontal_spacing,
+                        vertical_spacing=vertical_spacing,
+                        subplot_titles=subplot_titles)
 
-    for row in range(1, n_rows+1):
-        for col in range(1, n_cols+1):
+    all_metrics = (["total_counts", "n_genes_by_counts"]
+                   + [f"pct_counts_{qc_var}" for qc_var in qc_vars] if qc_vars
+                   else ["total_counts", "n_genes_by_counts"])
+
+    for c, metric in enumerate(all_metrics):
+        row = (c // cols) + 1
+        col = (c % cols) + 1
+        threshold = np.percentile(adata.obs[metric], quantile * 100)
+        fig.add_trace(go.Histogram(x=adata.obs[metric][adata.obs[metric] <= threshold]),
+                      row=row, col=col)
+
+    for row in range(1, rows+1):
+        for col in range(1, cols+1):
             fig.update_yaxes(showticklabels=False, ticks="", showline=False, row=row, col=col)
 
     fig.update_layout(showlegend=False,
@@ -135,7 +113,7 @@ def _get_basis(adata: AnnData, basis: str) -> np.ndarray:
     raise KeyError(err_msg)
 
 
-def _prepare_dimension_dataframes(adata, basis, dimensions):
+def _prepare_dimension_dataframes(adata, basis, dimensions, last_color_col, groups):
     """
     Prepare DataFrames for each dimension pair.
     """
@@ -151,6 +129,10 @@ def _prepare_dimension_dataframes(adata, basis, dimensions):
             [adata.obs.reset_index(), new_cols_df],
             axis=1,
         ).set_index(adata.obs_names)
+
+        df_for_plot = (df_for_plot[df_for_plot[last_color_col].isin(groups)]
+                       if groups else df_for_plot)
+
         dfs_for_plot.append(df_for_plot)
 
     return dfs_for_plot, bas
@@ -160,11 +142,6 @@ def _add_color_data(adata, dfs_for_plot, color):
     """
     Add color data to DataFrames.
     """
-    if color is None:
-        color = [""]
-    else:
-        color = [color] if isinstance(color, str) else list(color)
-
     for df_for_plot in dfs_for_plot:
         if color == [""]:
             df_for_plot[""] = pd.Categorical([""] * len(df_for_plot))
@@ -181,23 +158,31 @@ def _add_color_data(adata, dfs_for_plot, color):
     return color
 
 
-def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair):
+def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
+                         *, group_legends: bool):
     """
     Add a trace to the figure with proper formatting.
     """
-    legendgroup_name = f"{color_col}_{dim_pair}"
+    legendgroup_name = f"{color_col} {dim_pair}"
     fig.add_trace(trace, row=row, col=col)
-    fig.update_traces(
-        legendgrouptitle=dict(text=legendgroup_name),
-        legendgroup=legendgroup_name,
-        marker=dict(coloraxis=f"coloraxis{counter+1}"),
-        row=row,
-        col=col,
-    )
+    if group_legends:
+        fig.update_traces(
+            legendgrouptitle=dict(text=legendgroup_name),
+            legendgroup=legendgroup_name,
+            marker=dict(coloraxis=f"coloraxis{counter+1}"),
+            row=row,
+            col=col,
+        )
+    else:
+        fig.update_traces(
+            marker=dict(coloraxis=f"coloraxis{counter+1}"),
+            row=row,
+            col=col,
+        )
     fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
 
 
-def _update_figure_layout(fig, template, marker_size, width, height):
+def _update_figure_layout(fig, template, marker_size, width, height, title):
     """
     Update the final figure layout.
     """
@@ -209,10 +194,33 @@ def _update_figure_layout(fig, template, marker_size, width, height):
         margin={"pad": 20},
         width=width,
         height=height,
+        title=title,
     )
     fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_annotations(font={"family": "Serif"})
+
+
+def _calculate_centroids(df_for_plot, color_col, x_col, y_col):
+    """
+    Calculate centroids of each group for a given color_col.
+    """
+    return df_for_plot.groupby(color_col, observed=False)[[x_col, y_col]].mean()
+
+
+def _add_annotations(fig, centroids, row, col, annotations_font):
+    """
+    Add annotations (category labels) at centroids.
+    """
+    for cat, coords in centroids.iterrows():
+        fig.add_annotation(
+            x=coords.iloc[0],
+            y=coords.iloc[1],
+            text=str(cat),
+            showarrow=False,
+            xref=f"x{col}",
+            yref=f"y{row}",
+            font=annotations_font)
 
 
 def embedding(adata: AnnData,
@@ -222,12 +230,18 @@ def embedding(adata: AnnData,
               template: str | None = None,
               dimensions: tuple[int, int] | list[tuple[int, int]] = (0, 1),
               color: str | list[str] | None = None,
-              maxcols: int = 3,
+              groups: list[str] | None = None,
+              annotations: bool = False,
+              annotations_font: dict | None = None,
+              ncols: int = 3,
               horizontal_spacing: float = 0.1,
               vertical_spacing: float = 0.15,
               opacity: float = 0.25,
               width: int | None = None,
               height: int | None = None,
+              subtitles: str | list[str] | None = None,
+              title: str | None = None,
+              use_scanpy_colors: bool | None = None,
               return_fig: bool = False,
               _pca_annotate_variances: bool = False,
               **kwargs,
@@ -249,7 +263,13 @@ def embedding(adata: AnnData,
         Dimensions to plot, either single tuple or list of tuples.
     color : str | list[str] | None
         Column name(s) to use for coloring.
-    maxcols : int
+    groups: list[str] | None
+        Show only these groups from the last color in scatter plots.
+    annotations: bool
+        Show each group name in their centroids in scatter plots.
+    annotations_font: dict
+        Font parameters of annotations.
+    ncols : int
         Maximum number of columns in subplot grid.
     horizontal_spacing : float
         Spacing between subplot columns.
@@ -261,6 +281,12 @@ def embedding(adata: AnnData,
         Width of figure in pixels.
     height : int | None
         Height of figure in pixels.
+    subtitles : str | list[str] | None
+        List of subtitles to use, color by default.
+    title : str | None
+        Common title for the whole figure.
+    use_scanpy_colors : bool
+        If True, use color mapping from adata.uns
     return_fig : bool
         If True, return the figure instead of displaying it.
     **kwargs
@@ -271,25 +297,32 @@ def embedding(adata: AnnData,
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
-    if template is None:
-        template = pio.templates.default
+    template = template or pio.templates.default
 
     # Prepare data
     if isinstance(dimensions, tuple):
         dimensions = [dimensions]
-    dfs_for_plot, bas = _prepare_dimension_dataframes(adata, basis, dimensions)
+    if color is None:
+        color = [""]
+    else:
+        color = [color] if isinstance(color, str) else list(color)
+
+    last_color_col = color[-1]
+    dfs_for_plot, bas = _prepare_dimension_dataframes(
+        adata, basis, dimensions, last_color_col, groups)
     color = _add_color_data(adata, dfs_for_plot, color)
 
     # Calculate layout
     num_plots = len(color) * len(dimensions)
-    cols = min(num_plots, maxcols)
+    group_legends = num_plots > 1
+    cols = min(num_plots, ncols)
     rows = int(np.ceil(num_plots / cols))
 
     # Create figure
     fig = make_subplots(
         rows=rows,
         cols=cols,
-        subplot_titles=color * len(dimensions),
+        subplot_titles=list(subtitles) if subtitles is not None else color * len(dimensions),
         horizontal_spacing=horizontal_spacing,
         vertical_spacing=vertical_spacing,
     )
@@ -301,6 +334,15 @@ def embedding(adata: AnnData,
             x_col = f"{bas}{dim_pair[0]+1}"
             y_col = f"{bas}{dim_pair[1]+1}"
 
+            color_discrete_map = dict(
+                zip(adata.obs[color_col].cat.categories,
+                    adata.uns[f"{color_col}_colors"])) if use_scanpy_colors else None
+
+            if adata.obs[color_col].dtype.name == "category":
+                categories = adata.obs[color_col].cat.categories
+            else:
+                categories = adata.obs[color_col].unique()
+
             px_fig = px.scatter(
                 df_for_plot,
                 x=x_col,
@@ -308,13 +350,19 @@ def embedding(adata: AnnData,
                 template=template,
                 color=color_col,
                 opacity=opacity,
-                category_orders={color_col: sorted(df_for_plot[color_col].unique())},
+                category_orders={color_col: categories},
+                color_discrete_map=color_discrete_map,
                 **kwargs)
 
             for trace in px_fig["data"]:
                 row = (counter // cols) + 1
                 col = (counter % cols) + 1
-                _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair)
+                _add_trace_to_figure(fig, trace, row, col, counter,
+                                     color_col, dim_pair, group_legends=group_legends)
+
+            if annotations:
+                centroids = _calculate_centroids(df_for_plot, color_col, x_col, y_col)
+                _add_annotations(fig, centroids, row, col, annotations_font)
 
             if _pca_annotate_variances:
                 var_x = round(adata.uns["pca"]["variance_ratio"][dim_pair[0]] * 100, 2)
@@ -327,7 +375,7 @@ def embedding(adata: AnnData,
             counter += 1
 
     # Update final layout
-    _update_figure_layout(fig, template, marker_size, width, height)
+    _update_figure_layout(fig, template, marker_size, width, height, title)
 
     if return_fig:
         return fig
@@ -375,7 +423,125 @@ def umap(adata: AnnData, **kwargs):
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
-    embedding(adata, basis="umap", **kwargs)
+    return embedding(adata, basis="umap", **kwargs)
+
+
+def highly_variable_genes(adata: AnnData,
+                          *,
+                          log: bool = True,
+                          shared_axes: bool = False,
+                          opacity: float = 0.25,
+                          width: int | None = None,
+                          height: int | None = None,
+                          return_fig: bool = False,
+                          ):
+    """
+    Create scatter plots comparing normalized and non-normalized variances of genes
+    against their mean expression, highlighting highly variable genes.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix. Must contain 'means', 'variances', 'variances_norm',
+        and 'highly_variable' columns in adata.var.
+    log : bool
+        If True, use logarithmic scale for both axes.
+    shared_axes : bool
+        If True, share the same scale across both plots.
+    opacity : float
+        Opacity of markers in scatter plots (0 to 1).
+    width : int | None
+        Width of the figure in pixels.
+    height : int | None
+        Height of the figure in pixels.
+    return_fig : bool
+        If True, return the figure instead of displaying it.
+
+    Returns
+    -------
+    go.Figure | None
+        The figure object if return_fig is True, None otherwise.
+    """
+
+    fig = make_subplots(rows=1, cols=2,
+                        shared_xaxes=shared_axes, shared_yaxes=shared_axes)
+    norm_var_px = px.scatter(
+        adata.var, x="means", y="variances_norm", color="highly_variable",
+        hover_name=adata.var_names, opacity=opacity,
+        category_orders={"highly_variable": [True, False]},
+        color_discrete_sequence=[pio.templates[pio.templates.default].layout.colorway[1],
+                                 pio.templates[pio.templates.default].layout.colorway[0]])
+    var_px = px.scatter(
+        adata.var, x="means", y="variances", color="highly_variable",
+        hover_name=adata.var_names, opacity=opacity,
+        category_orders={"highly_variable": [True, False]},
+        color_discrete_sequence=[pio.templates[pio.templates.default].layout.colorway[1],
+                                 pio.templates[pio.templates.default].layout.colorway[0]])
+    for trace in norm_var_px["data"]:
+        fig.add_trace(trace, row=1, col=1)
+        fig.update_traces(showlegend=False)
+    for trace in var_px["data"]:
+        fig.add_trace(trace, row=1, col=2)
+
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
+        fig.update_yaxes(title="variance of genes (not normalized)")
+        fig.update_xaxes(title="mean expression of genes")
+    fig.update_yaxes(title="variance (normalized)", row=1, col=1)
+    fig.update_yaxes(title="variance (not normalized)", row=2, col=1)
+    fig.update_xaxes(title="mean expression")
+    fig.for_each_trace(lambda t: t.update(
+        name={"False": "other", "True": "highly variable"}[t.name]))
+    fig.update_layout(width=width, height=height, legend_title_text="",
+                      title="Highly variable genes")
+    if return_fig:
+        return fig
+    fig.show()
+    return None
+
+
+def pca_variance_ratio(adata: AnnData,
+                       n_pcs: int | None = None,
+                       *, return_fig: bool = False):
+    """
+    Create a scree plot showing explained variance ratio for principal components.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix. Must contain PCA results in adata.uns['pca']
+        with 'variance_ratio' key.
+    n_pcs : int | None
+        Number of principal components to plot. If None, all available
+        components will be shown.
+    return_fig : bool
+        If True, return the figure instead of displaying it.
+
+    Returns
+    -------
+    go.Figure | None
+        The figure object if return_fig is True, None otherwise.
+    """
+    y = adata.uns["pca"]["variance_ratio"][:n_pcs]
+    x = np.arange(1, len(y)+1)
+    plot_df = pd.DataFrame({"ranking": x, "explained variance": y,
+                            "PC": [f"PC{i}" for i in x]}).set_index("ranking")
+    fig = px.line(plot_df, y="explained variance", markers=True, hover_name="PC")
+    for c, val in enumerate(x):
+        fig.add_annotation(
+            x=val,
+            y=y[c],
+            text=f"PC{val}",
+            showarrow=False,
+            xanchor="left",
+            yanchor="bottom",
+            textangle=90)
+    fig.update_layout(yaxis_tickformat="%", title=" PCA scree plot")
+    if return_fig:
+        return fig
+    fig.show()
+    return None
 
 
 def save_fig(fig: go.Figure,
@@ -384,6 +550,8 @@ def save_fig(fig: go.Figure,
              dragmode: str = "pan",
              margin: dict | None = None,
              config: dict | None = None,
+             width: int | None = None,
+             height: int | None = None,
              save_html: bool = True,
              save_png: bool = True,
              **kwargs) -> None:
@@ -405,6 +573,10 @@ def save_fig(fig: go.Figure,
     config : dict | None
         Plotly config dictionary. If None, defaults to
         {"scrollZoom": True, "displaylogo": False}.
+    width: int | None
+        Figure width in px.
+    height: int | None
+        Figure height in px.
     save_html : bool
         If True, save the figure as an interactive HTML file.
     save_png : bool
