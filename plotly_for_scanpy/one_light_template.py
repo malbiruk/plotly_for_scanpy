@@ -1,3 +1,8 @@
+"""
+Creates a custom "one_light" template and adds it to pio.templates.
+Only colors of background and zerolines are actually from one light colorscheme.
+"""
+
 import plotly.graph_objects as go
 import plotly.io as pio
 
@@ -21,8 +26,10 @@ custom_template.layout.yaxis.showline = True
 custom_template.layout.yaxis.zerolinecolor = "#eaeaea"
 
 # Set default color for traces
-custom_template.layout.colorway = ["lightseagreen", "lightsalmon", "steelblue",
-                                   "lightpink", "plum", "skyblue", "darkseagreen", "darkgray"]
+custom_template.layout.colorway = [
+    "lightseagreen", "lightsalmon", "steelblue", "lightpink", "plum",
+    "skyblue", "darkseagreen", "darkgray", "darksalmon", "mediumturquoise", "lightcoral", "palegreen", "orchid",
+    "powderblue", "thistle", "lightslategray"]
 custom_template.layout.colorscale = {"sequential": "purpor_r", "diverging": "Tealrose_r"}
 # Burg_r
 
