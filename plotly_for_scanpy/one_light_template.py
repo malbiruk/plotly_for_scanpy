@@ -28,8 +28,12 @@ custom_template.layout.yaxis.zerolinecolor = "#eaeaea"
 # Set default color for traces
 custom_template.layout.colorway = [
     "lightseagreen", "lightsalmon", "steelblue", "lightpink", "plum",
-    "skyblue", "darkseagreen", "darkgray", "darksalmon", "mediumturquoise", "lightcoral", "palegreen", "orchid",
-    "powderblue", "thistle", "lightslategray"]
+    "skyblue", "darkseagreen", "darkgray", "darksalmon", "mediumturquoise", "lightcoral",
+    "palegreen", "orchid", "powderblue", "thistle", "lightslategray",
+    "peachpuff", "mistyrose", "lavender", "wheat", "paleturquoise",
+    "cornsilk", "lightcyan", "honeydew", "aliceblue", "seashell",
+    "mintcream", "lemonchiffon", "oldlace", "papayawhip", "lavenderblush",
+    "moccasin", "bisque", "gainsboro", "rosybrown", "palegoldenrod"]
 custom_template.layout.colorscale = {"sequential": "purpor_r", "diverging": "Tealrose_r"}
 # Burg_r
 
