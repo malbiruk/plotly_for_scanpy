@@ -14,11 +14,34 @@ from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
 
 
+def _calc_qc_metrics(adata, mt_col, quantile):
+    """
+    Calculate QC metrics to plot.
+    """
+    counts_per_cell = adata.X.sum(axis=1).A.T[0]
+    genes_per_cell = (adata.X > 0).sum(axis=1).T.A[0]
+    if mt_col not in adata.var.columns:
+        adata.var[mt_col] = adata.var_names.str.startswith("MT-")
+    mito_counts = adata[:, adata.var[mt_col]].X.sum(axis=1).T.A[0]
+    mito_pct = mito_counts / counts_per_cell * 100
+
+    if quantile is not None:
+        counts_threshold = np.percentile(counts_per_cell, quantile * 100)
+        genes_threshold = np.percentile(genes_per_cell, quantile * 100)
+        mito_pct_threshold = np.percentile(mito_pct, quantile * 100)
+
+        counts_per_cell = counts_per_cell[counts_per_cell <= counts_threshold]
+        genes_per_cell = genes_per_cell[genes_per_cell <= genes_threshold]
+        mito_pct = mito_pct[mito_pct <= mito_pct_threshold]
+    return counts_per_cell, genes_per_cell, mito_pct
+
+
 def qc_metrics(
     adata: AnnData,
     width: int | None = None,
     height: int | None = None,
     layout: str = "vertical",
+    quantile: float = 1.0,
     *,
     template: str | None = None,
     mt_col: str = "mt",
@@ -38,6 +61,8 @@ def qc_metrics(
         Height of the figure in pixels.
     layout : str
         Layout orientation ('vertical' or 'horizontal').
+    quantile: float
+        PLot data only of the first quantile (if specified).
     template : str | dict
         Plotly template name or template dict.
     mt_col : str
@@ -51,6 +76,8 @@ def qc_metrics(
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
+    counts_per_cell, genes_per_cell, mito_pct = _calc_qc_metrics(adata, mt_col, quantile)
+
     layout_err_msg = 'layout should be "vertical" or "horizontal"'
     if template is None:
         template = pio.templates.default
@@ -62,13 +89,6 @@ def qc_metrics(
         width = 1200 if layout == "horizontal" else None
     if not height:
         height = None if layout == "horizontal" else 1000
-
-    counts_per_cell = adata.X.sum(axis=1).A.T[0]
-    genes_per_cell = (adata.X > 0).sum(axis=1).T.A[0]
-    if mt_col not in adata.var.columns:
-        adata.var[mt_col] = adata.var_names.str.startswith("MT-")
-    mito_counts = adata[:, adata.var[mt_col]].X.sum(axis=1).T.A[0]
-    mito_pct = mito_counts / counts_per_cell * 100
 
     n_rows = 3 if layout == "vertical" else 1
     n_cols = 1 if layout == "vertical" else 3
@@ -104,7 +124,9 @@ def qc_metrics(
 
 
 def _get_basis(adata: AnnData, basis: str) -> np.ndarray:
-    """Get array for basis from anndata. Just tries to add 'X_'."""
+    """
+    Get array for basis from anndata. Just tries to add 'X_'.
+    """
     if basis in adata.obsm:
         return adata.obsm[basis]
     if f"X_{basis}" in adata.obsm:
