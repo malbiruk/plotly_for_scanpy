@@ -1033,14 +1033,14 @@ def volcano(degs_df: pd.DataFrame,
     return None
 
 
-def save_fig(fig: go.Figure,
-             savepath: str | Path,
-             *,
-             dragmode: str = "pan",
-             config: dict | None = None,
-             save_html: bool = True,
-             save_png: bool = True,
-             **kwargs) -> None:
+def savefig(fig: go.Figure,
+            savepath: str | Path,
+            *,
+            dragmode: str = "pan",
+            config: dict | None = None,
+            save_html: bool = True,
+            save_png: bool = True,
+            **kwargs) -> None:
     """
     Plot saving function with adjusted defaults.
 
