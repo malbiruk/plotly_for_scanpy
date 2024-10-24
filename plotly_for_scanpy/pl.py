@@ -2,6 +2,7 @@
 This module provides plotting functions for AnnData objects utilizing plotly.
 """
 
+import itertools
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
+import scipy
 from anndata import AnnData
 from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
@@ -462,7 +464,6 @@ def highly_variable_genes(adata: AnnData,
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
-
     fig = make_subplots(rows=1, cols=2,
                         shared_xaxes=shared_axes, shared_yaxes=shared_axes)
     norm_var_px = px.scatter(
@@ -544,6 +545,278 @@ def pca_variance_ratio(adata: AnnData,
     return None
 
 
+def _create_group_combinations(adata, groupby):
+    """
+    create group combinations if multiple groupby columns
+    """
+    group_combinations = []
+    if len(groupby) > 1:
+        unique_values = [adata.obs[col].unique() for col in groupby]
+        combinations = list(itertools.product(*unique_values))
+        group_combinations = [
+            "_".join(f"{val}" for val in comb)
+            for comb in combinations
+        ]
+    else:
+        group_combinations = adata.obs[groupby[0]].unique()
+    return group_combinations
+
+
+def _add_category_labels_annotations(fig, var_names, plot_df, dendrogram):
+    if isinstance(var_names, dict):
+        unique_cats = []
+        current_pos = -0.5
+        cat_positions = []
+        cat_ranges = []
+        for cat, genes in var_names.items():
+            unique_cats.append(cat)
+            n_genes = len(plot_df[plot_df["gene"].isin(genes)]["gene"].unique().tolist())
+            start_pos = current_pos + 0.25
+            end_pos = start_pos + n_genes - 0.25
+            cat_position = (start_pos + end_pos) / 2
+
+            cat_positions.append(cat_position)
+            cat_ranges.append((start_pos, end_pos))
+            current_pos = end_pos
+
+        all_shapes = []
+
+        yref = "y2" if dendrogram else "y"
+
+        for cat, pos, (start_pos, end_pos) in zip(unique_cats, cat_positions, cat_ranges):
+            # Add bracket lines
+            all_shapes.extend([
+                dict(
+                    type="line",
+                    xref="paper", yref=yref,
+                    x0=1.025, x1=1.025,
+                    y0=start_pos, y1=end_pos,
+                    line=dict(color="black", width=1)),
+                dict(
+                    type="line",
+                    xref="paper", yref=yref,
+                    x0=1, x1=1.025,
+                    y0=start_pos, y1=start_pos,
+                    line=dict(color="black", width=1)),
+                dict(
+                    type="line",
+                    xref="paper", yref=yref,
+                    x0=1, x1=1.025,
+                    y0=end_pos, y1=end_pos,
+                    line=dict(color="black", width=1)),
+            ])
+
+            # Add rotated text label
+            fig.add_annotation(
+                x=1.05,
+                y=pos,
+                text=cat,
+                textangle=90,
+                xref="paper",
+                yref=yref,
+                showarrow=False,
+                font=dict(size=12),
+                xanchor="center",
+                yanchor="middle",
+            )
+        fig.update_layout(shapes=all_shapes)
+
+
+def _create_plot_data(adata, var_names, groupby):
+    group_combinations = _create_group_combinations(adata, groupby)
+    genes_df = adata.var[["means", "n_cells"]].copy()
+    genes_df["pct_cells"] = genes_df["n_cells"] / adata.n_obs * 100
+
+    if isinstance(var_names, dict):
+        genes_flat = []
+        categories = []
+        for category, genes in var_names.items():
+            genes_flat.extend(genes)
+            categories.extend([category] * len(genes))
+    else:
+        genes_flat = var_names
+        categories = [None] * len(genes_flat)
+
+    plot_data = []
+    for group_combo in group_combinations:
+        if len(groupby) > 1:
+            # Create mask for multiple groupby columns
+            mask = np.ones(len(adata), dtype=bool)
+            for col, val in zip(groupby, group_combo.split("_"), strict=True):
+                mask &= (adata.obs[col] == val)
+        else:
+            # Single groupby column
+            mask = (adata.obs[groupby[0]] == group_combo)
+
+        # Get subset for this group
+        adata_group = adata[mask]
+
+        # Calculate statistics for each gene in this group
+        group_stats = pd.DataFrame(index=genes_flat)
+        group_stats["means"] = adata_group[:, genes_flat].X.mean(axis=0).A1 if scipy.sparse.issparse(
+            adata_group.X) else adata_group[:, genes_flat].X.mean(axis=0)
+        group_stats["n_cells"] = (adata_group[:, genes_flat].X > 0).sum(axis=0).A1 if scipy.sparse.issparse(
+            adata_group.X) else (adata_group[:, genes_flat].X > 0).sum(axis=0)
+        group_stats["pct_cells"] = group_stats["n_cells"] / len(adata_group) * 100
+
+        for gene in genes_flat:
+            plot_data.append({  # noqa: PERF401
+                "gene": gene,
+                "category": categories[genes_flat.index(gene)],
+                "group": group_combo,
+                "cells_fraction": group_stats.loc[gene, "pct_cells"],
+                "mean_expression": group_stats.loc[gene, "means"],
+            })
+
+    return pd.DataFrame(plot_data)
+
+
+def dotplot(adata,
+            var_names,
+            groupby,
+            *,
+            dendrogram: bool = False,
+            categories_order=None,
+            size_max=15,
+            height=None,
+            width=None,
+            return_fig=False,
+            template=None,
+            **kwargs):
+
+    template = template or pio.templates.default
+
+    groupby = [groupby] if isinstance(groupby, str) else list(groupby)
+    dendrogram_data = adata.uns["_".join(["dendrogram", *groupby])] if dendrogram else None
+    categories_order = dendrogram_data["categories_ordered"] if dendrogram else categories_order
+
+    plot_df = _create_plot_data(adata, var_names, groupby)
+
+    if categories_order:
+        unmatched_categories = set(categories_order) - set(plot_df["group"].unique())
+        err_msg = ("The following categories were not found "
+                   f"in specified groups:\n{unmatched_categories}")
+        if unmatched_categories:
+            raise KeyError(err_msg)
+
+    plot_df["gene"] = pd.Categorical(
+        plot_df["gene"], categories=plot_df["gene"].unique(), ordered=True)
+    plot_df["group"] = pd.Categorical(plot_df["group"], categories=categories_order, ordered=True)
+    plot_df = plot_df.sort_values(["group", "gene"])
+
+    # Create plot
+    scatter_fig = px.scatter(
+        plot_df,
+        x="group",
+        y="gene",
+        size="cells_fraction",
+        color="mean_expression",
+        custom_data=["cells_fraction", "mean_expression"],
+        size_max=size_max,
+        range_x=[-0.5, len(plot_df["group"].unique())-0.5],
+        range_y=[-0.5, len(plot_df["gene"].unique())-0.5],
+        width=width,
+        height=height,
+        **kwargs)
+
+    if not dendrogram:
+        scatter_fig.update_layout(
+            xaxis_title="",
+            yaxis_title="",
+            annotations=[
+                dict(
+                    text="Dot size — % cells",
+                    xref="paper",
+                    yref="paper",
+                    x=1.075,
+                    y=0.5,
+                    xanchor="left",
+                    yanchor="middle",
+                    showarrow=False,
+                    textangle=-90,  # Vertical text
+                )])
+        fig = scatter_fig
+
+    else:
+        dendrogram_height_ratio = 100 / scatter_fig.layout.height if scatter_fig.layout.height else 0.15
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            row_heights=[dendrogram_height_ratio, 1-dendrogram_height_ratio],
+            vertical_spacing=0,
+        )
+
+        # Add dendrogram trace
+        dendr_xs = dendrogram_data["dendrogram_info"]["icoord"]
+        dendr_ys = dendrogram_data["dendrogram_info"]["dcoord"]
+        for xs, ys in zip(dendr_xs, dendr_ys):
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="lines",
+                    hoverinfo="skip",
+                    line=dict(color="black", width=1),
+                    showlegend=False),
+                row=1,
+                col=1)
+
+        for trace in scatter_fig.data:
+            fig.add_trace(trace, row=2, col=1)
+
+        factor = (np.max(dendr_xs) - np.min(dendr_xs)) / len(plot_df["group"].unique())
+
+        fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False,
+                         range=[-0.5*factor + np.min(dendr_xs), 0.5*factor+np.max(dendr_xs)],
+                         showline=False, row=1, col=1)
+        fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False,
+                         showline=False, row=1, col=1)
+        fig.update_xaxes(title="", range=[-0.5, len(plot_df["group"].unique())-0.5], row=2, col=1)
+        fig.update_yaxes(title="", range=[-0.5, len(plot_df["gene"].unique())-0.5], row=2, col=1)
+        fig.update_layout(annotations=[
+            dict(
+                text="Dot size — % cells",
+                xref="paper",
+                yref="paper",
+                x=1.075,
+                y=0.5,
+                xanchor="left",
+                yanchor="middle",
+                showarrow=False,
+                textangle=-90,  # Vertical text
+            )])
+
+    _add_category_labels_annotations(fig, var_names, plot_df, dendrogram)
+
+    fig.update_coloraxes(reversescale=True,
+                         colorbar_title="Mean expression",
+                         colorbar_lenmode="pixels",
+                         colorbar_len=200,
+                         colorbar_thickness=20,
+                         colorbar_x=1.1)
+
+    # Customize hover template
+    fig.update_traces(
+        hovertemplate="<br>".join([
+            "Group: %{x}",
+            "Gene: %{y}",
+            "Cells expressing: %{customdata[0]:.1f}%",
+            "Mean expression: %{customdata[1]:.2f}",
+            "<extra></extra>"]))
+
+    fig.update_layout(
+        height=height,
+        width=width,
+        template=template,
+    )
+
+    if return_fig:
+        return fig
+    fig.show()
+    return None
+
+
 def save_fig(fig: go.Figure,
              savepath: str | Path,
              *,
@@ -595,7 +868,7 @@ def save_fig(fig: go.Figure,
     if not config:
         config = {"scrollZoom": True, "displaylogo": False}
 
-    fig.update_layout(dragmode=dragmode, margin=margin)
+    fig.update_layout(dragmode=dragmode, margin=margin, width=width, height=height)
     if save_html:
         fig.write_html(savepath.with_suffix(".html"),
                        config=config,
