@@ -1,5 +1,5 @@
 - [ ] add layer to embedding and dotplot
-- [ ] dotplot: add swap_axes, expression_cutoff, mean_only_expressed, standard_scale, title, colorbar_title
+- [ ] dotplot: add swap_axes, expression_cutoff, mean_only_expressed, standard_scale
 - [ ] pl.highest_expr_genes (show those genes that yield the highest fraction of counts in each single cell, across all cells)
 - [ ] pl.rank_genes_groups (make horizontal bars)
 - [ ] pl.violin

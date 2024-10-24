@@ -681,6 +681,8 @@ def dotplot(adata: AnnData,
             dendrogram: bool = False,
             categories_order: list | None = None,
             size_max: int = 15,
+            title: str = "",
+            colorbar_title: str = "Mean expression",
             height: int | None = None,
             width: int | None = None,
             return_fig: bool = False,
@@ -694,23 +696,27 @@ def dotplot(adata: AnnData,
     -----------
     adata : AnnData
         Annotated data matrix
-    var_names : str, list, or dict
-        Variables to plot
-    groupby : str or list
+    var_names : list | dict
+        Variables (genes) to plot, should be in adata.var_names
+    groupby : str | list
         Column name(s) to group by
-    dendrogram : bool, optional
+    dendrogram : bool
         Whether to show dendrogram
-    categories_order : list, optional
+    categories_order : list | None
         Custom category ordering
-    size_max : int, optional
+    size_max : int
         Maximum dot size
-    height : int, optional
+    title : str
+        Title for the whole plot
+    colorbar_title : str
+        Colorbar title, "Mean expression" be default
+    height : int | None
         Plot height
-    width : int, optional
+    width : int | None
         Plot width
-    return_fig : bool, optional
+    return_fig : bool
         Whether to return the figure object
-    template : str, optional
+    template : str | None
         Plotly template name
     **kwargs : dict
         Additional arguments for px.scatter
@@ -827,7 +833,7 @@ def dotplot(adata: AnnData,
     _add_category_labels_annotations(fig, var_names, plot_df, dendrogram)
 
     fig.update_coloraxes(reversescale=True,
-                         colorbar_title="Mean expression",
+                         colorbar_title=colorbar_title,
                          colorbar_lenmode="pixels",
                          colorbar_len=200,
                          colorbar_thickness=20,
@@ -845,6 +851,7 @@ def dotplot(adata: AnnData,
     fig.update_layout(
         height=height,
         width=width,
+        title=title,
         template=template,
     )
 
