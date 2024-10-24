@@ -623,6 +623,9 @@ def _add_category_labels_annotations(fig, var_names, plot_df, dendrogram):
 
 
 def _create_plot_data(adata, var_names, groupby):
+    """
+    Create plotting df for dotplot function.
+    """
     group_combinations = _create_group_combinations(adata, groupby)
     genes_df = adata.var[["means", "n_cells"]].copy()
     genes_df["pct_cells"] = genes_df["n_cells"] / adata.n_obs * 100
@@ -671,18 +674,52 @@ def _create_plot_data(adata, var_names, groupby):
     return pd.DataFrame(plot_data)
 
 
-def dotplot(adata,
-            var_names,
-            groupby,
+def dotplot(adata: AnnData,
+            var_names: list[str] | dict[str, str],
+            groupby: str | list[str],
             *,
             dendrogram: bool = False,
-            categories_order=None,
-            size_max=15,
-            height=None,
-            width=None,
-            return_fig=False,
-            template=None,
+            categories_order: list | None = None,
+            size_max: int = 15,
+            height: int | None = None,
+            width: int | None = None,
+            return_fig: bool = False,
+            template: str | None = None,
             **kwargs):
+    """
+    Create a dot plot visualization with optional dendrogram support
+    (use sc.tl.dendrogram beforehand to be able to plot dendrogram).
+
+    Parameters:
+    -----------
+    adata : AnnData
+        Annotated data matrix
+    var_names : str, list, or dict
+        Variables to plot
+    groupby : str or list
+        Column name(s) to group by
+    dendrogram : bool, optional
+        Whether to show dendrogram
+    categories_order : list, optional
+        Custom category ordering
+    size_max : int, optional
+        Maximum dot size
+    height : int, optional
+        Plot height
+    width : int, optional
+        Plot width
+    return_fig : bool, optional
+        Whether to return the figure object
+    template : str, optional
+        Plotly template name
+    **kwargs : dict
+        Additional arguments for px.scatter
+
+    Returns:
+    --------
+    plotly.graph_objects.Figure or None
+        Figure object if return_fig is True, None otherwise
+    """
 
     template = template or pio.templates.default
 
@@ -817,14 +854,183 @@ def dotplot(adata,
     return None
 
 
+def _calculate_n_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05) -> int:
+    """
+    deg_df:        table of DEGs, should include columns 'LFC' and 'pval_adj'
+    logfc:     threshold for DEGs by absolute value logfc
+    pval:      threshold for DEGs by adjusted p-value
+
+    returns n of DEGs
+    """
+    return len(deg_df[(abs(deg_df["LFC"]) > logfc) & (deg_df["pval_adj"] < pval)])
+
+
+def _process_df_for_volcano(deg_df: pd.DataFrame,
+                            logfc: float = 0.3, pval: float = 0.05, *,
+                            remove_outliers: bool = True) -> pd.DataFrame:
+    """
+    rename columns, add columns '-log10 P-value' and 'DEG type',
+    remove outliers using interquantile range method
+
+    deg_df:            table of DEGs, should include columns 'LFC' and 'pval_adj'
+    logfc:             threshold for DEGs by absolute value logfc
+    pval:              threshold for DEGs by adjusted p-value
+    remove_outliers:   flag to remove genes with logfc value >= quartile + 15 * interquartile range
+    """
+    deg_df = deg_df.copy()
+    if remove_outliers:
+        q1 = deg_df["LFC"].quantile(0.25)
+        q3 = deg_df["LFC"].quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - 15 * iqr
+        upper_bound = q3 + 15 * iqr
+        were_genes = len(deg_df)
+        deg_df = deg_df[(deg_df["LFC"] >= lower_bound) & (deg_df["LFC"] <= upper_bound)]
+        n_removed_genes = were_genes - len(deg_df)
+        if n_removed_genes != 0:
+            print(f"{n_removed_genes} genes were removed as outliers")
+
+    deg_df["DEG type"] = deg_df.apply(
+        lambda x: "Down-regulated genes"
+        if ((x["LFC"] < -logfc) and (x["pval_adj"] < pval))
+        else "Up-regulated genes" if ((x["LFC"] > logfc) and (x["pval_adj"] < pval))
+        else "Insignificant genes",
+        axis=1,
+    )
+    deg_df["-log10 P-value"] = -np.log10(deg_df["pval_adj"])
+    return deg_df.rename(columns={"LFC": "log Fold Change"})
+
+
+def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
+               title: str | None = None, color_discrete_map=None, **kwargs):
+    """
+    volcano plot
+    """
+    color_discrete_map = color_discrete_map or {"Up-regulated genes": "seagreen",
+                                                "Down-regulated genes": "pink",
+                                                "Insignificant genes": "darkgray"}
+    fig = px.scatter(deg_df, x="log Fold Change", y="-log10 P-value", color="DEG type",
+                     hover_name="Gene", title=title,
+                     color_discrete_map=color_discrete_map,
+                     **kwargs)
+    fig.update_yaxes(range=[0, deg_df["-log10 P-value"].max()])
+
+    fig.add_shape(
+        type="line",
+        x0=logfc, x1=logfc,
+        y0=0, y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(color="dimgray", width=0.5),
+    )
+    fig.add_shape(
+        type="line",
+        x0=-logfc, x1=-logfc,
+        y0=0, y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(color="dimgray", width=0.5),
+    )
+    fig.add_shape(
+        type="line",
+        x0=0, x1=1,
+        y0=-np.log10(pval), y1=-np.log10(pval),
+        xref="paper",
+        yref="y",
+        line=dict(color="dimgray", width=0.5),
+    )
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+        ),
+    )
+    return fig
+
+
+def volcano(degs_df: pd.DataFrame,
+            logfc: float = 0.3,
+            pval: float = 0.05,
+            *,
+            logfc_col: str = "LFC",
+            padj_col: str = "pval_adj",
+            gene_col: str = "Gene",
+            title: str | None = None,
+            remove_outliers: bool = True,
+            color_discrete_map: dict | None = None,
+            opacity: float = 0.5,
+            return_fig: bool = False,
+            template: str | None = None,
+            **kwargs):
+    """
+    Create a volcano visualization of differentially expressed genes
+
+    Parameters:
+    -----------
+    degs_df : DataFrame
+        Dataframe wirh DEGs (should have logfc, pvalue and gene name columns).
+    logfc : float
+        Log fold change threshold for significant genes.
+    pval : float
+        P-value threshold for significant genes.
+    logfc_col : str
+        Column name with log fold change data.
+    padj_col : str
+        Column name with p-value data.
+    gene_col : str
+        Column name with gene symbol data.
+    title : str | None
+        PLot title, will show amount and percent of DEGs if None.
+    remove_outliers : bool
+        If true, remove genes with logfc value >= quartile + 15 * interquartile range.
+    color_discrete_map : dict, optional
+        Dict with keys "Up-regulated genes", "Down-regulated genes", "Insignificant genes"
+        to assign colors.
+    opacity: float
+        Opacity of markers in volcano plot (0 to 1).
+    return_fig : bool, optional
+        Whether to return the figure object
+    template : str, optional
+        Plotly template name
+    **kwargs : dict
+        Additional arguments for px.scatter
+
+    Returns:
+    --------
+    plotly.graph_objects.Figure or None
+        Figure object if return_fig is True, None otherwise
+    """
+    template = template or pio.templates.default
+    degs_df = degs_df.copy()
+    degs_df = degs_df.rename(
+        columns={logfc_col: "LFC", gene_col: "Gene", padj_col: "pval_adj"})
+    if not title:
+        n_degs = _calculate_n_degs(degs_df, logfc, pval)
+        n_genes = len(degs_df)
+        degs_percent = round(n_degs / n_genes * 100, 2)
+        title = f"{n_degs} DEGS ({degs_percent}%)"
+    degs_df = _process_df_for_volcano(degs_df, logfc, pval, remove_outliers=remove_outliers)
+    fig = _plot_degs(degs_df, logfc, pval, title=title,
+                     color_discrete_map=color_discrete_map,
+                     opacity=opacity, **kwargs)
+    fig.update_xaxes(zeroline=False)
+    fig.update_yaxes(zeroline=False)
+
+    if return_fig:
+        return fig
+    fig.show()
+    return None
+
+
 def save_fig(fig: go.Figure,
              savepath: str | Path,
              *,
              dragmode: str = "pan",
-             margin: dict | None = None,
              config: dict | None = None,
-             width: int | None = None,
-             height: int | None = None,
              save_html: bool = True,
              save_png: bool = True,
              **kwargs) -> None:
@@ -840,16 +1046,9 @@ def save_fig(fig: go.Figure,
         based on the output format(s).
     dragmode : str
         Plotly dragmode setting for the figure (e.g., 'pan', 'zoom', 'select').
-    margin : dict | None
-        Dictionary specifying plot margins. If None, defaults to
-        {"l": 30, "r": 30, "t": 30, "b": 30}.
     config : dict | None
         Plotly config dictionary. If None, defaults to
         {"scrollZoom": True, "displaylogo": False}.
-    width: int | None
-        Figure width in px.
-    height: int | None
-        Figure height in px.
     save_html : bool
         If True, save the figure as an interactive HTML file.
     save_png : bool
@@ -863,12 +1062,10 @@ def save_fig(fig: go.Figure,
         Function saves the figure to disk and returns nothing.
     """
     savepath = Path(savepath)
-    if not margin:
-        margin = {"l": 30, "r": 30, "t": 30, "b": 30}
     if not config:
         config = {"scrollZoom": True, "displaylogo": False}
 
-    fig.update_layout(dragmode=dragmode, margin=margin, width=width, height=height)
+    fig.update_layout(dragmode=dragmode)
     if save_html:
         fig.write_html(savepath.with_suffix(".html"),
                        config=config,
