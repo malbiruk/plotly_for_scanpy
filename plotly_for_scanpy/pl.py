@@ -15,6 +15,10 @@ from anndata import AnnData
 from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
 
+ERR_MSG_KEY_NOT_FOUND = "Could not find {} in {}."
+ERR_MSG_UNEXPECTED_CATEGORIES = ("The following categories were not found in specified groups: {}\n"
+                                 "Specified groups: {}")
+
 
 def qc_metrics(
     adata: AnnData,
@@ -107,12 +111,15 @@ def _get_basis(adata: AnnData, basis: str) -> np.ndarray:
     """
     Get array for basis from anndata. Just tries to add 'X_'.
     """
+    additional_message = (" Run sc.pp.pca first." if basis in ("pca", "X_pca") else
+                          " Run sc.tl.umap first." if basis in ("umap", "X_umap") else "")
     if basis in adata.obsm:
         return adata.obsm[basis]
     if f"X_{basis}" in adata.obsm:
         return adata.obsm[f"X_{basis}"]
-    err_msg = f"Could not find '{basis}' or 'X_{basis}' in .obsm"
-    raise KeyError(err_msg)
+    raise KeyError(
+        ERR_MSG_KEY_NOT_FOUND.format(
+            f"{basis} or X_{basis}", ".obsm") + additional_message)
 
 
 def _prepare_dimension_dataframes(adata, basis, dimensions, last_color_col, groups):
@@ -149,13 +156,13 @@ def _add_color_data(adata, dfs_for_plot, color):
             df_for_plot[""] = pd.Categorical([""] * len(df_for_plot))
         else:
             for color_col in color:
-                err_msg = f"Could not find key {color_col} in .var_names or .obs.columns."
                 if color_col not in adata.obs.columns:
                     if color_col in adata.var_names:
                         df_for_plot[color_col] = adata[:,
                                                        adata.var_names == color_col].X.toarray().T[0]
                     else:
-                        raise KeyError(err_msg)
+                        raise KeyError(
+                            ERR_MSG_KEY_NOT_FOUND.format(color_col, ".var_names or .obs.columns"))
 
     return color
 
@@ -730,17 +737,21 @@ def dotplot(adata: AnnData,
     template = template or pio.templates.default
 
     groupby = [groupby] if isinstance(groupby, str) else list(groupby)
-    dendrogram_data = adata.uns["_".join(["dendrogram", *groupby])] if dendrogram else None
+    if dendrogram:
+        if "_".join(["dendrogram", *groupby]) not in adata.uns:
+            raise KeyError(ERR_MSG_KEY_NOT_FOUND.format(
+                "_".join(["dendrogram", *groupby]), ".uns") + " Run sc.tl.dendrogram first.")
+        dendrogram_data = adata.uns["_".join(["dendrogram", *groupby])]
     categories_order = dendrogram_data["categories_ordered"] if dendrogram else categories_order
 
     plot_df = _create_plot_data(adata, var_names, groupby)
 
     if categories_order:
         unmatched_categories = set(categories_order) - set(plot_df["group"].unique())
-        err_msg = ("The following categories were not found "
-                   f"in specified groups:\n{unmatched_categories}")
         if unmatched_categories:
-            raise KeyError(err_msg)
+            raise KeyError(
+                ERR_MSG_UNEXPECTED_CATEGORIES.format(
+                    unmatched_categories, plot_df["group"].unique()))
 
     plot_df["gene"] = pd.Categorical(
         plot_df["gene"], categories=plot_df["gene"].unique(), ordered=True)
