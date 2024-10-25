@@ -8,6 +8,7 @@ setup(
         "numpy",
         "pandas",
         "plotly",
+        "dash",
         "anndata",
     ],
     entry_points={},

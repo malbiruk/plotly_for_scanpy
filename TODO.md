@@ -11,3 +11,7 @@
 - [ ] pl.rank_genes_groups_matrixplot
 - [ ] pl.rank_genes_groups_heatmap
 - [ ] pl.correlation_matrix
+
+---
+
+test errors, test dotplot title, colorbar_title, test existing plots (2 datasets + tutorials)
