@@ -27,6 +27,7 @@ def qc_metrics(
     *,
     width: int | None = None,
     height: int | None = None,
+    bargap: int = 0,
     quantile: float = 1.0,
     template: str | None = None,
     horizontal_spacing: float = 0.075,
@@ -45,6 +46,8 @@ def qc_metrics(
         Width of the figure in pixels.
     height : int | None
         Height of the figure in pixels.
+    bargap: int
+        Gap between bars in histograms.
     layout : str
         Layout orientation ('vertical' or 'horizontal').
     quantile: float
@@ -96,8 +99,9 @@ def qc_metrics(
         for col in range(1, cols+1):
             fig.update_yaxes(showticklabels=False, ticks="", showline=False, row=row, col=col)
 
-    fig.update_layout(showlegend=False,
-                      template=template, width=width, height=height)
+    fig.update_layout(showlegend=False, template=template,
+                      width=width, height=height)
+    fig.update_layout(bargap=bargap)
     fig.update_annotations(font={"family": "Serif"})
 
     if return_fig:
@@ -191,25 +195,6 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
     fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
 
 
-def _update_figure_layout(fig, template, marker_size, width, height, title):
-    """
-    Update the final figure layout.
-    """
-    fig.update_traces(marker_size=marker_size)
-    fig.update_layout(
-        showlegend=True,
-        template=template,
-        legend_groupclick="toggleitem",
-        margin={"pad": 20},
-        width=width,
-        height=height,
-        title=title,
-    )
-    fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
-    fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
-    fig.update_annotations(font={"family": "Serif"})
-
-
 def _calculate_centroids(df_for_plot, color_col, x_col, y_col):
     """
     Calculate centroids of each group for a given color_col.
@@ -217,7 +202,7 @@ def _calculate_centroids(df_for_plot, color_col, x_col, y_col):
     return df_for_plot.groupby(color_col, observed=False)[[x_col, y_col]].mean()
 
 
-def _add_annotations(fig, centroids, row, col, annotations_font):
+def _add_annotations(fig, centroids, row, col):
     """
     Add annotations (category labels) at centroids.
     """
@@ -228,14 +213,15 @@ def _add_annotations(fig, centroids, row, col, annotations_font):
             text=str(cat),
             showarrow=False,
             xref=f"x{col}",
-            yref=f"y{row}",
-            font=annotations_font)
+            yref=f"y{row}")
 
 
 def embedding(adata: AnnData,
               basis: str,
               *,
               marker_size: float = 5,
+              marker_edgewidth: float | None = None,
+              marker_edgecolor: str | None = None,
               template: str | None = None,
               dimensions: tuple[int, int] | list[tuple[int, int]] = (0, 1),
               color: str | list[str] | None = None,
@@ -250,6 +236,7 @@ def embedding(adata: AnnData,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
               title: str | None = None,
+              cmap: str | None = None,
               return_fig: bool = False,
               _pca_annotate_variances: bool = False,
               **kwargs,
@@ -265,6 +252,10 @@ def embedding(adata: AnnData,
         Basis for dimensional reduction (e.g., 'X_umap', 'X_tsne', 'X_pca').
     marker_size : float
         Size of markers in scatter plots.
+    marker_edgewidth : float | None
+        Edge width of markers in scatter plots.
+    marker_edgecolor : str | None
+        Edge color of markers in scatter plots.
     template : str | dict
         Plotly template name or template dict.
     dimensions : tuple[int, int] | list[tuple[int, int]]
@@ -275,7 +266,7 @@ def embedding(adata: AnnData,
         Show only these groups from the last color in scatter plots.
     annotations: bool
         Show each group name in their centroids in scatter plots.
-    annotations_font: dict
+    annotations_font: dict | None
         Font parameters of annotations.
     ncols : int
         Maximum number of columns in subplot grid.
@@ -293,12 +284,12 @@ def embedding(adata: AnnData,
         List of subtitles to use, color by default.
     title : str | None
         Common title for the whole figure.
-    use_scanpy_colors : bool
-        If True, use color mapping from adata.uns
+    cmap : str | None
+        Colormap for continous variables.
     return_fig : bool
         If True, return the figure instead of displaying it.
     **kwargs
-        Additional keyword arguments passed to px.scatter.
+        Additional keyword arguments passed to fig.update_layout.
 
     Returns
     -------
@@ -341,6 +332,10 @@ def embedding(adata: AnnData,
         for color_col in color:
             x_col = f"{bas}{dim_pair[0]+1}"
             y_col = f"{bas}{dim_pair[1]+1}"
+            if (color_col in adata.obs) and (adata.obs[color_col].dtype.name == "category"):
+                category_orders = {color_col: adata.obs[color_col].cat.categories}
+            else:
+                category_orders = None
 
             px_fig = px.scatter(
                 df_for_plot,
@@ -349,7 +344,7 @@ def embedding(adata: AnnData,
                 template=template,
                 color=color_col,
                 opacity=opacity,
-                **kwargs)
+                category_orders=category_orders)
 
             for trace in px_fig["data"]:
                 row = (counter // cols) + 1
@@ -359,7 +354,7 @@ def embedding(adata: AnnData,
 
             if annotations:
                 centroids = _calculate_centroids(df_for_plot, color_col, x_col, y_col)
-                _add_annotations(fig, centroids, row, col, annotations_font)
+                _add_annotations(fig, centroids, row, col)
 
             if _pca_annotate_variances:
                 var_x = round(adata.uns["pca"]["variance_ratio"][dim_pair[0]] * 100, 2)
@@ -372,7 +367,26 @@ def embedding(adata: AnnData,
             counter += 1
 
     # Update final layout
-    _update_figure_layout(fig, template, marker_size, width, height, title)
+    fig.update_layout(
+        showlegend=True,
+        template=template,
+        legend_groupclick="toggleitem",
+        margin={"pad": 20},
+        width=width,
+        height=height,
+        title=title,
+        **kwargs)
+    if cmap:
+        for i in range(1, num_plots+1):
+            fig.layout[f"coloraxis{i}"]["colorscale"] = cmap
+    fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
+    fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
+    fig.update_traces(marker_size=marker_size,
+                      marker_line=dict(width=marker_edgewidth,
+                                       color=marker_edgecolor))
+
+    annotations_font = annotations_font or {"family": "Serif"}
+    fig.update_annotations(font=annotations_font)
 
     if return_fig:
         return fig
@@ -676,8 +690,11 @@ def dotplot(adata: AnnData,
             dendrogram: bool = False,
             categories_order: list | None = None,
             size_max: int = 15,
+            marker_edgewidth: float | None = None,
+            marker_edgecolor: str | None = None,
             title: str = "",
             colorbar_title: str = "Mean expression",
+            cmap: str | None = None,
             height: int | None = None,
             width: int | None = None,
             return_fig: bool = False,
@@ -701,10 +718,16 @@ def dotplot(adata: AnnData,
         Custom category ordering
     size_max : int
         Maximum dot size
+    marker_edgewidth : float | None
+        Edge width of dots
+    marker_edgecolor : str | None
+        Edge color of dots
     title : str
         Title for the whole plot
     colorbar_title : str
         Colorbar title, "Mean expression" be default
+    cmap : str | None
+        Coloraxes colorscale (colormap) name
     height : int | None
         Plot height
     width : int | None
@@ -714,7 +737,7 @@ def dotplot(adata: AnnData,
     template : str | None
         Plotly template name
     **kwargs : dict
-        Additional arguments for px.scatter
+        Additional arguments for fig.update_layout()
 
     Returns:
     --------
@@ -758,8 +781,7 @@ def dotplot(adata: AnnData,
         range_x=[-0.5, len(plot_df["group"].unique())-0.5],
         range_y=[-0.5, len(plot_df["gene"].unique())-0.5],
         width=width,
-        height=height,
-        **kwargs)
+        height=height)
 
     if not dendrogram:
         scatter_fig.update_layout(
@@ -832,11 +854,19 @@ def dotplot(adata: AnnData,
     _add_category_labels_annotations(fig, var_names, plot_df, dendrogram)
 
     fig.update_coloraxes(reversescale=True,
+                         colorscale=cmap,
                          colorbar_title=colorbar_title,
                          colorbar_lenmode="pixels",
                          colorbar_len=200,
                          colorbar_thickness=20,
                          colorbar_x=1.1)
+
+    fig.update_layout(
+        height=height,
+        width=width,
+        title=title,
+        template=template,
+        **kwargs)
 
     # Customize hover template
     fig.update_traces(
@@ -845,14 +875,9 @@ def dotplot(adata: AnnData,
             "Gene: %{y}",
             "Cells expressing: %{customdata[0]:.1f}%",
             "Mean expression: %{customdata[1]:.2f}",
-            "<extra></extra>"]))
-
-    fig.update_layout(
-        height=height,
-        width=width,
-        title=title,
-        template=template,
-    )
+            "<extra></extra>"]),
+        marker_line=dict(width=marker_edgewidth,
+                         color=marker_edgecolor))
 
     if return_fig:
         return fig
@@ -1022,7 +1047,7 @@ def volcano(degs_df: pd.DataFrame,
     degs_df = _process_df_for_volcano(degs_df, logfc, pval, remove_outliers=remove_outliers)
     fig = _plot_degs(degs_df, logfc, pval, title=title,
                      color_discrete_map=color_discrete_map,
-                     opacity=opacity, **kwargs)
+                     opacity=opacity, template=template, **kwargs)
     fig.update_xaxes(zeroline=False)
     fig.update_yaxes(zeroline=False)
 
