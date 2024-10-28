@@ -94,8 +94,7 @@ class TraceManager:
 
 class DynamicPlot:
     """
-    Wrapper for plotly's go.Figure object. Uses density based downsampling,
-    preserving the ratio between traces.
+    Wrapper for plotly's go.Figure object. Uses density based downsampling, preserving the ratio between traces.
 
     Parameters
     ----------
@@ -104,9 +103,12 @@ class DynamicPlot:
     resolution : int
         Amount of points to render (from all traces).
     buffer_ratio : float
-        A buffer zone is added beyond the viewpoint to each side (top, bottom, lef, right)
-        to smooth out the panning behavior.
+        A buffer zone is added beyond the viewpoint to each side (top, bottom, lef, right) to smooth out the panning behavior.
         buffer_ratio is a factor by which the rendering area exceeds the viewpoint in each direction.
+        For example,
+            buffer_ratio = 0 => only viewpoint square is rendered
+            buffer_ratio = 0.5 => 4 * viewpoint square is rendered
+            buffer_ratio = 1 => 9 * viewpoint square is rendered
     """
 
     def __init__(self, fig: go.Figure, resolution: int = 100_000, buffer_ratio: float = 1):
@@ -207,4 +209,4 @@ class DynamicPlot:
         app.run_server(*args, **kwargs)
 
 
-dd = DynamicPlot
+dd = DynamicPlot  # dd -- dynamic downsampling

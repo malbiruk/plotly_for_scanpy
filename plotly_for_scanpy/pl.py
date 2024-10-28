@@ -250,7 +250,6 @@ def embedding(adata: AnnData,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
               title: str | None = None,
-              use_scanpy_colors: bool | None = None,
               return_fig: bool = False,
               _pca_annotate_variances: bool = False,
               **kwargs,
@@ -343,10 +342,6 @@ def embedding(adata: AnnData,
             x_col = f"{bas}{dim_pair[0]+1}"
             y_col = f"{bas}{dim_pair[1]+1}"
 
-            color_discrete_map = dict(
-                zip(adata.obs[color_col].cat.categories,
-                    adata.uns[f"{color_col}_colors"])) if use_scanpy_colors else None
-
             if adata.obs[color_col].dtype.name == "category":
                 categories = adata.obs[color_col].cat.categories
             else:
@@ -360,7 +355,6 @@ def embedding(adata: AnnData,
                 color=color_col,
                 opacity=opacity,
                 category_orders={color_col: categories},
-                color_discrete_map=color_discrete_map,
                 **kwargs)
 
             for trace in px_fig["data"]:
