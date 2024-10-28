@@ -342,11 +342,6 @@ def embedding(adata: AnnData,
             x_col = f"{bas}{dim_pair[0]+1}"
             y_col = f"{bas}{dim_pair[1]+1}"
 
-            if adata.obs[color_col].dtype.name == "category":
-                categories = adata.obs[color_col].cat.categories
-            else:
-                categories = adata.obs[color_col].unique()
-
             px_fig = px.scatter(
                 df_for_plot,
                 x=x_col,
@@ -354,7 +349,6 @@ def embedding(adata: AnnData,
                 template=template,
                 color=color_col,
                 opacity=opacity,
-                category_orders={color_col: categories},
                 **kwargs)
 
             for trace in px_fig["data"]:
