@@ -513,7 +513,9 @@ def highly_variable_genes(adata: AnnData,
 
 def pca_variance_ratio(adata: AnnData,
                        n_pcs: int | None = None,
-                       *, return_fig: bool = False):
+                       *,
+                       log: bool = False,
+                       return_fig: bool = False):
     """
     Create a scree plot showing explained variance ratio for principal components.
 
@@ -525,6 +527,8 @@ def pca_variance_ratio(adata: AnnData,
     n_pcs : int | None
         Number of principal components to plot. If None, all available
         components will be shown.
+    log : bool
+        Logarithmic y axes.
     return_fig : bool
         If True, return the figure instead of displaying it.
 
@@ -548,6 +552,8 @@ def pca_variance_ratio(adata: AnnData,
             yanchor="bottom",
             textangle=90)
     fig.update_layout(yaxis_tickformat="%", title=" PCA scree plot")
+    if log:
+        fig.update_yaxes(type="log")
     if return_fig:
         return fig
     fig.show()
