@@ -143,8 +143,15 @@ def _prepare_dimension_dataframes(adata, basis, dimensions, last_color_col, grou
             axis=1,
         ).set_index(adata.obs_names)
 
-        df_for_plot = (df_for_plot[df_for_plot[last_color_col].isin(groups)]
-                       if groups else df_for_plot)
+        if groups:
+            # Add "NA" to categories if it's not already there
+            if "NA" not in df_for_plot[last_color_col].cat.categories:
+                df_for_plot[last_color_col] = df_for_plot[last_color_col].cat.add_categories("NA")
+
+            # Set values not in groups to "NA"
+            df_for_plot[last_color_col] = df_for_plot[last_color_col].where(
+                df_for_plot[last_color_col].isin(groups), "NA",
+            )
 
         dfs_for_plot.append(df_for_plot)
 
@@ -344,6 +351,7 @@ def embedding(adata: AnnData,
                 template=template,
                 color=color_col,
                 opacity=opacity,
+                color_discrete_map={"NA": "lightgray"},
                 category_orders=category_orders)
 
             for trace in px_fig["data"]:
