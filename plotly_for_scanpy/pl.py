@@ -539,8 +539,6 @@ def highly_variable_genes(adata: AnnData,
     if log:
         fig.update_xaxes(type="log")
         fig.update_yaxes(type="log")
-        fig.update_yaxes(title="variance of genes (not normalized)")
-        fig.update_xaxes(title="mean expression of genes")
     fig.update_yaxes(title="variance (normalized)", row=1, col=1)
     fig.update_yaxes(title="variance (not normalized)", row=2, col=1)
     fig.update_xaxes(title="mean expression")
