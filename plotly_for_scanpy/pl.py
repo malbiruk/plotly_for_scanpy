@@ -239,6 +239,8 @@ def embedding(adata: AnnData,
               horizontal_spacing: float = 0.1,
               vertical_spacing: float = 0.15,
               opacity: float = 1,
+              hover_name:  str | int | pd.Series | np.array | None = None,
+              hover_data: str | list[str | int] | pd.Series | np.array | dict | None = None,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
@@ -283,6 +285,10 @@ def embedding(adata: AnnData,
         Spacing between subplot rows.
     opacity : float
         Opacity of markers (0 to 1).
+    hover_name : str | int | pd.Series | np.array| None
+        hover_name for px.express, shows the data bold in the hover tooltip.
+    hover_data : str | list[str | int] | pd.Series | np.array | dict | None
+        hover_data for px.express, shows the data in the hover tooltip.
     width : int | None
         Width of figure in pixels.
     height : int | None
@@ -351,6 +357,8 @@ def embedding(adata: AnnData,
                 template=template,
                 color=color_col,
                 opacity=opacity,
+                hover_name=hover_name,
+                hover_data=hover_data,
                 color_discrete_map={"NA": "lightgray"},
                 category_orders=category_orders)
 
