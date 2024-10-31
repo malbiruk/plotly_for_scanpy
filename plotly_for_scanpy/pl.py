@@ -511,7 +511,7 @@ def highly_variable_genes(adata: AnnData,
                                  pio.templates[pio.templates.default].layout.colorway[0]])
     y = "variances" if "variances" in adata.var else "dispersions"
     var_px = px.scatter(
-        adata.var, x="means", y="variances", color="highly_variable",
+        adata.var, x="means", y=y, color="highly_variable",
         hover_name=adata.var_names, opacity=opacity,
         category_orders={"highly_variable": [True, False]},
         color_discrete_sequence=[pio.templates[pio.templates.default].layout.colorway[1],
