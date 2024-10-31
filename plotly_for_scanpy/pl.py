@@ -183,13 +183,12 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
     """
     Add a trace to the figure with proper formatting.
     """
-    legendgroup_name = f"{color_col} {dim_pair}"
+    legendgroup_name = f"{color_col} {dim_pair}" if dim_pair != (0, 1) else color_col
     fig.add_trace(trace, row=row, col=col)
     if group_legends:
         fig.update_traces(
             legendgrouptitle=dict(text=legendgroup_name),
             legendgroup=legendgroup_name,
-            marker=dict(coloraxis=f"coloraxis{counter+1}"),
             row=row,
             col=col,
         )
@@ -200,6 +199,7 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
             col=col,
         )
     if not shared_coloraxes:
+        fig.update_traces(marker=dict(coloraxis=f"coloraxis{counter+1}"))
         fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
 
 
@@ -215,13 +215,68 @@ def _add_annotations(fig, centroids, row, col):
     Add annotations (category labels) at centroids.
     """
     for cat, coords in centroids.iterrows():
-        fig.add_annotation(
-            x=coords.iloc[0],
-            y=coords.iloc[1],
-            text=str(cat),
-            showarrow=False,
-            xref=f"x{col}",
-            yref=f"y{row}")
+        if cat != "NA":
+            fig.add_annotation(
+                x=coords.iloc[0],
+                y=coords.iloc[1],
+                text=str(cat),
+                showarrow=False,
+                xref=f"x{col}",
+                yref=f"y{row}")
+
+
+def _update_coloraxes(fig, rows, cols, color, hspace, wspace, showcoloraxes, shared_coloraxes, cmap):
+    if shared_coloraxes:
+        fig.layout.coloraxis.colorbar.x = 1.05
+        fig.layout.legend.x = 1.1
+        fig.layout.coloraxis.colorbar.xref = "paper"
+        fig.layout.coloraxis.colorbar.yref = "paper"
+        fig.layout.coloraxis.colorbar.y = 0.5
+        fig.layout.coloraxis.colorbar.thickness = 10
+        fig.layout.coloraxis.colorbar.len = 1/rows
+        if cmap:
+            fig.layout.coloraxis.colorscale = cmap
+    else:
+        for i in range(1, len(color)+1):
+            coloraxis = f"coloraxis{i}"
+
+            # Determine row and column for the current subplot
+            row = (i - 1) // cols  # 0-indexed row position
+            col = (i - 1) % cols   # 0-indexed column position
+
+            # Calculate x position based on the column, spacing, and total number of columns
+            x_position = (col + 1) / cols - (wspace * (cols - col - 1) / cols)
+
+            # Calculate y position based on the row, spacing, and total number of rows
+            y_position = 1 - (row + 0.5) / rows * (1 + hspace) + (hspace / 2)
+
+            # Set the color axis properties
+            fig.layout[coloraxis].showscale = showcoloraxes
+            fig.layout[coloraxis].colorbar.x = x_position
+            fig.layout[coloraxis].colorbar.y = y_position
+
+            # Set other properties, such as thickness and length
+            fig.layout[coloraxis].colorbar.thickness = 10
+            fig.layout[coloraxis].colorbar.len = 0.75 / rows
+            if i <= len(fig.data):
+                fig.data[i - 1].update(marker=dict(coloraxis=coloraxis))
+            if cmap:
+                fig.layout[f"coloraxis{i}"].colorscale = cmap
+
+
+def _update_annotations(fig, annotations_font, annotations_outline_width):
+    annotations_font = annotations_font or {"family": "Serif"}
+    if annotations_outline_width:
+        annotations_font["shadow"] = (
+            f"{annotations_outline_width}px {annotations_outline_width}px 0 white, "
+            f"-{annotations_outline_width}px {annotations_outline_width}px 0 white, "
+            f"{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
+            f"-{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
+            f"0 {annotations_outline_width}px 0 white, "
+            f"0 -{annotations_outline_width}px 0 white, "
+            f"{annotations_outline_width}px 0 0 white, "
+            f"-{annotations_outline_width}px 0 0 white")
+    fig.update_annotations(font=annotations_font)
 
 
 def embedding(adata: AnnData,
@@ -236,19 +291,22 @@ def embedding(adata: AnnData,
               groups: list[str] | None = None,
               annotations: bool = False,
               annotations_font: dict | None = None,
+              annotations_outline_width: int | None = None,
               ncols: int = 3,
               wspace: float = 0.1,
               hspace: float = 0.15,
               opacity: float = 1,
               hover_name:  str | pd.Series | None = None,
               hover_data: str | list[str] | pd.Series | dict | None = None,
-              shared_axes: bool = True,
+              shared_axes: bool | str = "all",
               shared_coloraxes: bool = False,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
               title: str | None = None,
               cmap: str | None = None,
+              showlegend: bool = True,
+              showcoloraxes: bool = True,
               return_fig: bool = False,
               _pca_annotate_variances: bool = False,
               **kwargs,
@@ -280,6 +338,8 @@ def embedding(adata: AnnData,
         Show each group name in their centroids in scatter plots.
     annotations_font: dict | None
         Font parameters of annotations.
+    annotations_outline_width: int | None
+        White outline for text (actually created using css shadows).
     ncols : int
         Maximum number of columns in subplot grid.
     wspace : float
@@ -292,8 +352,11 @@ def embedding(adata: AnnData,
         Hover_name for px.express, shows the data bold in the hover tooltip.
     hover_data : str | list[str | int] | pd.Series | np.array | dict | None
         Hover_data for px.express, shows the data in the hover tooltip.
-    shared_axes: bool
-        All subplots will be panned and zoomed together (True by default).
+    shared_axes: bool | str
+        True or "columns": Share axes among subplots in the same column.
+        "rows": Share axes among subplots in the same row
+        "all": Share axes across all subplots in the grid.
+        False: don't share axes.
     shared_coloraxes: bool
         Use the same coloraxes for all subplots.
     width : int | None
@@ -306,6 +369,10 @@ def embedding(adata: AnnData,
         Common title for the whole figure.
     cmap : str | None
         Colormap for continous variables.
+    showlegend : bool
+        Show all legends.
+    showcoloraxes : bool
+        Show all coloraxes.
     return_fig : bool
         If True, return the figure instead of displaying it.
     **kwargs
@@ -341,17 +408,18 @@ def embedding(adata: AnnData,
     fig = make_subplots(
         rows=rows,
         cols=cols,
-        subplot_titles=list(subtitles) if subtitles is not None else color * len(dimensions),
+        subplot_titles=list(subtitles) if subtitles is not None else np.repeat(
+            color, len(dimensions)),
         horizontal_spacing=wspace,
         vertical_spacing=hspace,
-        shared_xaxes="all" if shared_axes else False,
-        shared_yaxes="all" if shared_axes else False,
+        shared_xaxes=shared_axes,
+        shared_yaxes=shared_axes,
     )
 
     # Add subplots
     counter = 0
-    for dim_pair, df_for_plot in zip(dimensions, dfs_for_plot):
-        for color_col in color:
+    for color_col in color:
+        for dim_pair, df_for_plot in zip(dimensions, dfs_for_plot):
             x_col = f"{bas}{dim_pair[0]+1}"
             y_col = f"{bas}{dim_pair[1]+1}"
             if (color_col in adata.obs) and (adata.obs[color_col].dtype.name == "category"):
@@ -378,7 +446,7 @@ def embedding(adata: AnnData,
                                      color_col, dim_pair, group_legends=group_legends,
                                      shared_coloraxes=shared_coloraxes)
 
-            if annotations:
+            if annotations and df_for_plot[color_col].dtype.name == "category":
                 centroids = _calculate_centroids(df_for_plot, color_col, x_col, y_col)
                 _add_annotations(fig, centroids, row, col)
 
@@ -392,27 +460,28 @@ def embedding(adata: AnnData,
                 fig.update_yaxes(title_text=y_col, row=row, col=col)
             counter += 1
 
+    fig.layout.legend.x = 1.05
+
+    _update_annotations(fig, annotations_font, annotations_outline_width)
+
     # Update final layout
     fig.update_layout(
-        showlegend=True,
+        showlegend=showlegend,
         template=template,
         legend_groupclick="toggleitem",
         margin={"pad": 20},
         width=width,
         height=height,
-        title=title,
-        **kwargs)
-    if cmap:
-        for i in range(1, num_plots+1):
-            fig.layout[f"coloraxis{i}"]["colorscale"] = cmap
+        title=title)
+
+    _update_coloraxes(fig, rows, cols, color, hspace, wspace, showcoloraxes, shared_coloraxes, cmap)
     fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_traces(marker_size=marker_size,
                       marker_line=dict(width=marker_edgewidth,
                                        color=marker_edgecolor))
 
-    annotations_font = annotations_font or {"family": "Serif"}
-    fig.update_annotations(font=annotations_font)
+    fig.update_layout(**kwargs)
 
     if return_fig:
         return fig
