@@ -30,33 +30,36 @@ def qc_metrics(
     bargap: int = 0,
     quantile: float = 1.0,
     template: str | None = None,
-    horizontal_spacing: float = 0.075,
-    vertical_spacing: float = 0.1,
+    wspace: float = 0.075,
+    hspace: float = 0.1,
     return_fig: bool = False,
 ) -> go.Figure | None:
     """
     Calculate and create histograms of QC metrics:
-        N counts per cell, N genes per cell, % of mitochondrial expression per cell
+        N counts per cell, N genes per cell, % of mitochondrial expression per cell or other qc_vars
 
     Parameters
     ----------
     adata : AnnData
         Annotated data matrix.
+    qc_vars : str | list | None
+        List of qc_vars specified, same as in sc.pp.calculate_metrics.
+    ncols : int
+        Maximum n of columns in subplots layout.
     width : int | None
         Width of the figure in pixels.
     height : int | None
         Height of the figure in pixels.
     bargap: int
         Gap between bars in histograms.
-    layout : str
-        Layout orientation ('vertical' or 'horizontal').
     quantile: float
         PLot data only of the first quantile (if specified).
     template : str | dict
         Plotly template name or template dict.
-    mt_col : str
-        Column name in data.var containing bool info if gene is mitochondrial
-        (the column will be cerated if it doesn't exist).
+    wspace : float
+        Spacing between subplot columns.
+    hspace : float
+        Spacing between subplot rows.
     return_fig : bool
         If True, return the figure instead of displaying it.
 
@@ -80,8 +83,8 @@ def qc_metrics(
                       else ["N of UMI per cell", "N of genes per cell"])
 
     fig = make_subplots(rows=rows, cols=cols,
-                        horizontal_spacing=horizontal_spacing,
-                        vertical_spacing=vertical_spacing,
+                        horizontal_spacing=wspace,
+                        vertical_spacing=hspace,
                         subplot_titles=subplot_titles)
 
     all_metrics = (["total_counts", "n_genes_by_counts"]
@@ -142,13 +145,10 @@ def _prepare_dimension_dataframes(adata, basis, dimensions, last_color_col, grou
             [adata.obs.reset_index(), new_cols_df],
             axis=1,
         ).set_index(adata.obs_names)
+        for col in df_for_plot.select_dtypes(include="category").columns:
+            df_for_plot[col] = df_for_plot[col].cat.add_categories("NA").fillna("NA")
 
         if groups:
-            # Add "NA" to categories if it's not already there
-            if "NA" not in df_for_plot[last_color_col].cat.categories:
-                df_for_plot[last_color_col] = df_for_plot[last_color_col].cat.add_categories("NA")
-
-            # Set values not in groups to "NA"
             df_for_plot[last_color_col] = df_for_plot[last_color_col].where(
                 df_for_plot[last_color_col].isin(groups), "NA",
             )
@@ -179,7 +179,7 @@ def _add_color_data(adata, dfs_for_plot, color):
 
 
 def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
-                         *, group_legends: bool):
+                         *, group_legends: bool, shared_coloraxes: bool):
     """
     Add a trace to the figure with proper formatting.
     """
@@ -199,7 +199,8 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
             row=row,
             col=col,
         )
-    fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
+    if not shared_coloraxes:
+        fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
 
 
 def _calculate_centroids(df_for_plot, color_col, x_col, y_col):
@@ -236,12 +237,13 @@ def embedding(adata: AnnData,
               annotations: bool = False,
               annotations_font: dict | None = None,
               ncols: int = 3,
-              horizontal_spacing: float = 0.1,
-              vertical_spacing: float = 0.15,
+              wspace: float = 0.1,
+              hspace: float = 0.15,
               opacity: float = 1,
               hover_name:  str | pd.Series | None = None,
               hover_data: str | list[str] | pd.Series | dict | None = None,
               shared_axes: bool = True,
+              shared_coloraxes: bool = False,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
@@ -280,18 +282,20 @@ def embedding(adata: AnnData,
         Font parameters of annotations.
     ncols : int
         Maximum number of columns in subplot grid.
-    horizontal_spacing : float
+    wspace : float
         Spacing between subplot columns.
-    vertical_spacing : float
+    hspace : float
         Spacing between subplot rows.
     opacity : float
         Opacity of markers (0 to 1).
     hover_name : str | int | pd.Series | np.array| None
-        hover_name for px.express, shows the data bold in the hover tooltip.
+        Hover_name for px.express, shows the data bold in the hover tooltip.
     hover_data : str | list[str | int] | pd.Series | np.array | dict | None
-        hover_data for px.express, shows the data in the hover tooltip.
+        Hover_data for px.express, shows the data in the hover tooltip.
     shared_axes: bool
-        all subplots will drag and zoom together (True by default)
+        All subplots will be panned and zoomed together (True by default).
+    shared_coloraxes: bool
+        Use the same coloraxes for all subplots.
     width : int | None
         Width of figure in pixels.
     height : int | None
@@ -338,8 +342,8 @@ def embedding(adata: AnnData,
         rows=rows,
         cols=cols,
         subplot_titles=list(subtitles) if subtitles is not None else color * len(dimensions),
-        horizontal_spacing=horizontal_spacing,
-        vertical_spacing=vertical_spacing,
+        horizontal_spacing=wspace,
+        vertical_spacing=hspace,
         shared_xaxes="all" if shared_axes else False,
         shared_yaxes="all" if shared_axes else False,
     )
@@ -371,7 +375,8 @@ def embedding(adata: AnnData,
                 row = (counter // cols) + 1
                 col = (counter % cols) + 1
                 _add_trace_to_figure(fig, trace, row, col, counter,
-                                     color_col, dim_pair, group_legends=group_legends)
+                                     color_col, dim_pair, group_legends=group_legends,
+                                     shared_coloraxes=shared_coloraxes)
 
             if annotations:
                 centroids = _calculate_centroids(df_for_plot, color_col, x_col, y_col)
@@ -494,14 +499,17 @@ def highly_variable_genes(adata: AnnData,
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
+    shared_axes = shared_axes if not shared_axes else "rows"
     fig = make_subplots(rows=1, cols=2,
                         shared_xaxes=shared_axes, shared_yaxes=shared_axes)
+    y = "variances_norm" if "variances_norm" in adata.var else "dispersions_norm"
     norm_var_px = px.scatter(
-        adata.var, x="means", y="variances_norm", color="highly_variable",
+        adata.var, x="means", y=y, color="highly_variable",
         hover_name=adata.var_names, opacity=opacity,
         category_orders={"highly_variable": [True, False]},
         color_discrete_sequence=[pio.templates[pio.templates.default].layout.colorway[1],
                                  pio.templates[pio.templates.default].layout.colorway[0]])
+    y = "variances" if "variances" in adata.var else "dispersions"
     var_px = px.scatter(
         adata.var, x="means", y="variances", color="highly_variable",
         hover_name=adata.var_names, opacity=opacity,

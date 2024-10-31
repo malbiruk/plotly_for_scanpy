@@ -1,4 +1,5 @@
 - [ ] add layer to embedding and dotplot
+- [ ] add colorbar options to embedding (vcenter, vmax, vmin)
 - [ ] add show_n_cells to qc_metrics
 - [ ] dotplot: add swap_axes, expression_cutoff, mean_only_expressed, standard_scale, gene_symbols
 - [ ] pl.highest_expr_genes (show those genes that yield the highest fraction of counts in each single cell, across all cells)
