@@ -467,9 +467,13 @@ def highly_variable_genes(adata: AnnData,
                           *,
                           log: bool = True,
                           shared_axes: bool = False,
-                          opacity: float = 0.25,
+                          opacity: float = 1,
+                          marker_size: float | None = 3,
+                          marker_edgewidth: float | None = None,
+                          marker_edgecolor: str | None = None,
                           width: int | None = None,
                           height: int | None = None,
+                          template: str | None = None,
                           return_fig: bool = False,
                           ):
     """
@@ -487,10 +491,18 @@ def highly_variable_genes(adata: AnnData,
         If True, share the same scale across both plots.
     opacity : float
         Opacity of markers in scatter plots (0 to 1).
+    marker_size : float
+        Size of markers in scatter plots.
+    marker_edgewidth : float | None
+        Edge width of markers in scatter plots.
+    marker_edgecolor : str | None
+        Edge color of markers in scatter plots.
     width : int | None
         Width of the figure in pixels.
     height : int | None
         Height of the figure in pixels.
+    template : str | dict
+        Plotly template name or template dict.
     return_fig : bool
         If True, return the figure instead of displaying it.
 
@@ -499,6 +511,8 @@ def highly_variable_genes(adata: AnnData,
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
+    template = template or pio.templates.default
+
     shared_axes = shared_axes if not shared_axes else "rows"
     fig = make_subplots(rows=1, cols=2,
                         shared_xaxes=shared_axes, shared_yaxes=shared_axes)
@@ -533,7 +547,11 @@ def highly_variable_genes(adata: AnnData,
     fig.for_each_trace(lambda t: t.update(
         name={"False": "other", "True": "highly variable"}[t.name]))
     fig.update_layout(width=width, height=height, legend_title_text="",
+                      template=template,
                       title="Highly variable genes")
+    fig.update_traces(marker_size=marker_size,
+                      marker_line=dict(width=marker_edgewidth,
+                                       color=marker_edgecolor))
     if return_fig:
         return fig
     fig.show()
@@ -544,6 +562,7 @@ def pca_variance_ratio(adata: AnnData,
                        n_pcs: int | None = None,
                        *,
                        log: bool = False,
+                       template: str | None = None,
                        return_fig: bool = False):
     """
     Create a scree plot showing explained variance ratio for principal components.
@@ -558,6 +577,8 @@ def pca_variance_ratio(adata: AnnData,
         components will be shown.
     log : bool
         Logarithmic y axes.
+    template : str | dict
+        Plotly template name or template dict.
     return_fig : bool
         If True, return the figure instead of displaying it.
 
@@ -566,6 +587,8 @@ def pca_variance_ratio(adata: AnnData,
     go.Figure | None
         The figure object if return_fig is True, None otherwise.
     """
+    template = template or pio.templates.default
+
     y = adata.uns["pca"]["variance_ratio"][:n_pcs]
     x = np.arange(1, len(y)+1)
     plot_df = pd.DataFrame({"ranking": x, "explained variance": y,
@@ -580,7 +603,7 @@ def pca_variance_ratio(adata: AnnData,
             xanchor="left",
             yanchor="bottom",
             textangle=90)
-    fig.update_layout(yaxis_tickformat="%", title=" PCA scree plot")
+    fig.update_layout(yaxis_tickformat="%", title=" PCA scree plot", template=template)
     if log:
         fig.update_yaxes(type="log")
     if return_fig:
