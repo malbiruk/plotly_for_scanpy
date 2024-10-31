@@ -226,7 +226,7 @@ def _add_annotations(fig, centroids, row, col):
 def embedding(adata: AnnData,
               basis: str,
               *,
-              marker_size: float = 5,
+              marker_size: float | None = 3,
               marker_edgewidth: float | None = None,
               marker_edgecolor: str | None = None,
               template: str | None = None,
@@ -241,6 +241,7 @@ def embedding(adata: AnnData,
               opacity: float = 1,
               hover_name:  str | int | pd.Series | np.array | None = None,
               hover_data: str | list[str | int] | pd.Series | np.array | dict | None = None,
+              shared_axes: bool = True,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
@@ -289,6 +290,8 @@ def embedding(adata: AnnData,
         hover_name for px.express, shows the data bold in the hover tooltip.
     hover_data : str | list[str | int] | pd.Series | np.array | dict | None
         hover_data for px.express, shows the data in the hover tooltip.
+    shared_axes: bool
+        all subplots will drag and zoom together (True by default)
     width : int | None
         Width of figure in pixels.
     height : int | None
@@ -337,6 +340,8 @@ def embedding(adata: AnnData,
         subplot_titles=list(subtitles) if subtitles is not None else color * len(dimensions),
         horizontal_spacing=horizontal_spacing,
         vertical_spacing=vertical_spacing,
+        shared_xaxes="all" if shared_axes else False,
+        shared_yaxes="all" if shared_axes else False,
     )
 
     # Add subplots
