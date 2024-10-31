@@ -536,12 +536,6 @@ def highly_variable_genes(adata: AnnData,
     for trace in var_px["data"]:
         fig.add_trace(trace, row=1, col=2)
 
-    if log:
-        fig.update_xaxes(type="log")
-        fig.update_yaxes(type="log")
-    fig.update_yaxes(title="variance (normalized)", row=1, col=1)
-    fig.update_yaxes(title="variance (not normalized)", row=2, col=1)
-    fig.update_xaxes(title="mean expression")
     fig.for_each_trace(lambda t: t.update(
         name={"False": "other", "True": "highly variable"}[t.name]))
     fig.update_layout(width=width, height=height, legend_title_text="",
@@ -550,6 +544,12 @@ def highly_variable_genes(adata: AnnData,
     fig.update_traces(marker_size=marker_size,
                       marker_line=dict(width=marker_edgewidth,
                                        color=marker_edgecolor))
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
+    fig.update_yaxes(title="variance (normalized)", row=1, col=1)
+    fig.update_yaxes(title="variance (not normalized)", row=1, col=2)
+    fig.update_xaxes(title="mean expression")
     if return_fig:
         return fig
     fig.show()
