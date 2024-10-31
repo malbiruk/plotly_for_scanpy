@@ -14,6 +14,7 @@ import scipy
 from anndata import AnnData
 from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
+from scipy.sparse import issparse
 
 ERR_MSG_KEY_NOT_FOUND = "Could not find {} in {}."
 ERR_MSG_UNEXPECTED_CATEGORIES = ("The following categories were not found in specified groups: {}\n"
@@ -770,8 +771,11 @@ def _create_plot_data(adata, var_names, groupby):
     Create plotting df for dotplot function.
     """
     group_combinations = _create_group_combinations(adata, groupby)
-    genes_df = adata.var[["means", "n_cells"]].copy()
-    genes_df["pct_cells"] = genes_df["n_cells"] / adata.n_obs * 100
+    genes_df = adata.var[["means"]].copy()
+    n_cells_by_counts = (adata.X > 0).sum(axis=0)
+    genes_df["n_cells_by_counts"] = n_cells_by_counts.A1 if isinstance(
+        n_cells_by_counts, np.matrix) else n_cells_by_counts
+    genes_df["pct_cells"] = genes_df["n_cells_by_counts"] / adata.n_obs * 100
 
     if isinstance(var_names, dict):
         genes_flat = []
@@ -801,15 +805,15 @@ def _create_plot_data(adata, var_names, groupby):
         group_stats = pd.DataFrame(index=genes_flat)
         group_stats["means"] = adata_group[:, genes_flat].X.mean(axis=0).A1 if scipy.sparse.issparse(
             adata_group.X) else adata_group[:, genes_flat].X.mean(axis=0)
-        group_stats["n_cells"] = (adata_group[:, genes_flat].X > 0).sum(axis=0).A1 if scipy.sparse.issparse(
+        group_stats["n_cells_by_counts"] = (adata_group[:, genes_flat].X > 0).sum(axis=0).A1 if scipy.sparse.issparse(
             adata_group.X) else (adata_group[:, genes_flat].X > 0).sum(axis=0)
-        group_stats["pct_cells"] = group_stats["n_cells"] / len(adata_group) * 100
+        group_stats["pct_cells"] = group_stats["n_cells_by_counts"] / len(adata_group) * 100
 
         for gene in genes_flat:
             plot_data.append({  # noqa: PERF401
                 "gene": gene,
                 "category": categories[genes_flat.index(gene)],
-                "group": group_combo,
+                "group": str(group_combo),
                 "cells_fraction": group_stats.loc[gene, "pct_cells"],
                 "mean_expression": group_stats.loc[gene, "means"],
             })
@@ -824,8 +828,8 @@ def dotplot(adata: AnnData,
             dendrogram: bool = False,
             categories_order: list | None = None,
             size_max: int = 15,
-            marker_edgewidth: float | None = None,
-            marker_edgecolor: str | None = None,
+            marker_edgewidth: float | None = 0.5,
+            marker_edgecolor: str | None = "darkslategray",
             title: str = "",
             colorbar_title: str = "Mean expression",
             cmap: str | None = None,
@@ -934,6 +938,7 @@ def dotplot(adata: AnnData,
                     textangle=-90,  # Vertical text
                 )])
         fig = scatter_fig
+        fig.update_xaxes(type="category")
 
     else:
         dendrogram_height_ratio = 100 / scatter_fig.layout.height if scatter_fig.layout.height else 0.15
@@ -970,7 +975,8 @@ def dotplot(adata: AnnData,
                          showline=False, row=1, col=1)
         fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False,
                          showline=False, row=1, col=1)
-        fig.update_xaxes(title="", range=[-0.5, len(plot_df["group"].unique())-0.5], row=2, col=1)
+        fig.update_xaxes(title="", type="category",
+                         range=[-0.5, len(plot_df["group"].unique())-0.5], row=2, col=1)
         fig.update_yaxes(title="", range=[-0.5, len(plot_df["gene"].unique())-0.5], row=2, col=1)
         fig.update_layout(annotations=[
             dict(
