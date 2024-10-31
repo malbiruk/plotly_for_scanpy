@@ -561,7 +561,9 @@ def pca_variance_ratio(adata: AnnData,
                        *,
                        log: bool = False,
                        template: str | None = None,
-                       return_fig: bool = False):
+                       annotations: bool = True,
+                       return_fig: bool = False,
+                       **kwargs):
     """
     Create a scree plot showing explained variance ratio for principal components.
 
@@ -577,8 +579,12 @@ def pca_variance_ratio(adata: AnnData,
         Logarithmic y axes.
     template : str | dict
         Plotly template name or template dict.
+    annotations : bool
+        Create text annotations for each PC (True by default).
     return_fig : bool
         If True, return the figure instead of displaying it.
+    **kwargs
+        Additional keyword arguments passed to fig.update_layout.
 
     Returns
     -------
@@ -591,19 +597,22 @@ def pca_variance_ratio(adata: AnnData,
     x = np.arange(1, len(y)+1)
     plot_df = pd.DataFrame({"ranking": x, "explained variance": y,
                             "PC": [f"PC{i}" for i in x]}).set_index("ranking")
-    fig = px.line(plot_df, y="explained variance", markers=True, hover_name="PC")
-    for c, val in enumerate(x):
-        fig.add_annotation(
-            x=val,
-            y=y[c],
-            text=f"PC{val}",
-            showarrow=False,
-            xanchor="left",
-            yanchor="bottom",
-            textangle=90)
-    fig.update_layout(yaxis_tickformat="%", title=" PCA scree plot", template=template)
+    fig = px.line(plot_df, y="explained variance", markers=True,
+                  hover_name="PC")
     if log:
-        fig.update_yaxes(type="log")
+        fig.update_yaxes(type="log", dtick=1)
+    if annotations:
+        for c, val in enumerate(x):
+            fig.add_annotation(
+                x=val,
+                y=np.log10(y[c]) if log else y[c],
+                text=f"PC{val}",
+                showarrow=False,
+                xanchor="left",
+                yanchor="bottom",
+                textangle=90)
+    fig.update_xaxes(range=(0, len(y)+1))
+    fig.update_layout(yaxis_tickformat=",.0%", title=" PCA scree plot", template=template, **kwargs)
     if return_fig:
         return fig
     fig.show()
