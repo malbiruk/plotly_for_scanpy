@@ -31,8 +31,8 @@ custom_template.layout.colorway = [
     "skyblue", "darkseagreen", "darkgray", "darksalmon", "mediumturquoise", "lightcoral",
     "palegreen", "orchid", "powderblue", "thistle", "lightslategray",
     "peachpuff", "mistyrose", "lavender", "aquamarine", "wheat", "paleturquoise",
-    "cornsilk", "lightcyan", "lightpink", "khaki",
-    "mediumaquamarine", "lemonchiffon", "pink", "peru", "palevioletred",
+    "sandybrown", "lightcyan", "lightpink", "khaki",
+    "mediumaquamarine", "lemonchiffon", "pink", "palevioletred",
     "moccasin", "burlywood", "gainsboro", "rosybrown", "palegoldenrod"]
 custom_template.layout.colorscale = {"sequential": "purpor_r", "diverging": "Tealrose_r"}
 # Burg_r
