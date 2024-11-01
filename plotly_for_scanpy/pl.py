@@ -194,12 +194,6 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
             row=row,
             col=col,
         )
-    else:
-        fig.update_traces(
-            marker=dict(coloraxis=f"coloraxis{counter+1}"),
-            row=row,
-            col=col,
-        )
     if not shared_coloraxes:
         fig.update_traces(marker=dict(coloraxis=f"coloraxis{counter+1}"))
         fig.update_layout({f"coloraxis{counter+1}": {"showscale": False}})
@@ -227,7 +221,7 @@ def _add_annotations(fig, centroids, row, col):
                 yref=f"y{row}")
 
 
-def _update_coloraxes(fig, rows, cols, color, hspace, wspace, showcoloraxes, shared_coloraxes, cmap):
+def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes, shared_coloraxes, cmap):
     if shared_coloraxes:
         fig.layout.coloraxis.colorbar.x = 1.05
         fig.layout.legend.x = 1.1
@@ -239,7 +233,7 @@ def _update_coloraxes(fig, rows, cols, color, hspace, wspace, showcoloraxes, sha
         if cmap:
             fig.layout.coloraxis.colorscale = cmap
     else:
-        for i in range(1, len(color)+1):
+        for i in range(1, num_plots+1):
             coloraxis = f"coloraxis{i}"
 
             # Determine row and column for the current subplot
@@ -476,7 +470,8 @@ def embedding(adata: AnnData,
         height=height,
         title=title)
 
-    _update_coloraxes(fig, rows, cols, color, hspace, wspace, showcoloraxes, shared_coloraxes, cmap)
+    _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace,
+                      showcoloraxes, shared_coloraxes, cmap)
     fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_traces(marker_size=marker_size,
@@ -1082,10 +1077,10 @@ def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
                                                 "Down-regulated genes": "pink",
                                                 "Insignificant genes": "darkgray"}
     fig = px.scatter(deg_df, x="log Fold Change", y="-log10 P-value", color="DEG type",
-                     hover_name="Gene", title=title,
+                     hover_name="Gene", hover_data=["pval_adj"], title=title,
                      color_discrete_map=color_discrete_map,
                      **kwargs)
-    fig.update_yaxes(range=[0, deg_df["-log10 P-value"].max()])
+    fig.update_yaxes(range=[0, deg_df["-log10 P-value"].max()+1])
 
     fig.add_shape(
         type="line",
@@ -1093,7 +1088,7 @@ def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
         y0=0, y1=1,
         xref="x",
         yref="paper",
-        line=dict(color="dimgray", width=0.5),
+        line=dict(color="lightgray", width=0.5),
     )
     fig.add_shape(
         type="line",
@@ -1101,7 +1096,7 @@ def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
         y0=0, y1=1,
         xref="x",
         yref="paper",
-        line=dict(color="dimgray", width=0.5),
+        line=dict(color="lightgray", width=0.5),
     )
     fig.add_shape(
         type="line",
@@ -1109,7 +1104,7 @@ def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
         y0=-np.log10(pval), y1=-np.log10(pval),
         xref="paper",
         yref="y",
-        line=dict(color="dimgray", width=0.5),
+        line=dict(color="lightgray", width=0.5),
     )
 
     fig.update_layout(
