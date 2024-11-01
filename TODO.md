@@ -11,6 +11,7 @@
 - [ ] pl.rank_genes_groups_matrixplot
 - [ ] pl.rank_genes_groups_heatmap
 - [ ] pl.correlation_matrix
+- [ ] add an ability to increase marker size while zooming to dd
 
 ---
 

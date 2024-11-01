@@ -218,7 +218,25 @@ def _add_annotations(fig, centroids, row, col):
                 text=str(cat),
                 showarrow=False,
                 xref=f"x{col}",
-                yref=f"y{row}")
+                yref=f"y{row}",
+                name="annotations")
+
+
+def _update_annotations(fig, annotations_font, annotations_outline_width, subtitles_font):
+    annotations_font = annotations_font or {"family": "Serif"}
+    subtitles_font = subtitles_font or {"size": 16, "family": "Serif"}
+    if annotations_outline_width:
+        annotations_font["shadow"] = (
+            f"{annotations_outline_width}px {annotations_outline_width}px 0 white, "
+            f"-{annotations_outline_width}px {annotations_outline_width}px 0 white, "
+            f"{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
+            f"-{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
+            f"0 {annotations_outline_width}px 0 white, "
+            f"0 -{annotations_outline_width}px 0 white, "
+            f"{annotations_outline_width}px 0 0 white, "
+            f"-{annotations_outline_width}px 0 0 white")
+    fig.update_annotations(font=subtitles_font)
+    fig.update_annotations(selector={"name": "annotations"}, font=annotations_font)
 
 
 def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes, shared_coloraxes, cmap):
@@ -260,21 +278,6 @@ def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes,
                 fig.layout[f"coloraxis{i}"].colorscale = cmap
 
 
-def _update_annotations(fig, annotations_font, annotations_outline_width):
-    annotations_font = annotations_font or {"family": "Serif"}
-    if annotations_outline_width:
-        annotations_font["shadow"] = (
-            f"{annotations_outline_width}px {annotations_outline_width}px 0 white, "
-            f"-{annotations_outline_width}px {annotations_outline_width}px 0 white, "
-            f"{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
-            f"-{annotations_outline_width}px -{annotations_outline_width}px 0 white, "
-            f"0 {annotations_outline_width}px 0 white, "
-            f"0 -{annotations_outline_width}px 0 white, "
-            f"{annotations_outline_width}px 0 0 white, "
-            f"-{annotations_outline_width}px 0 0 white")
-    fig.update_annotations(font=annotations_font)
-
-
 def embedding(adata: AnnData,
               basis: str,
               *,
@@ -299,7 +302,7 @@ def embedding(adata: AnnData,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
-              title: str | None = None,
+              subtitles_font: dict | None = None,
               cmap: str | None = None,
               showlegend: bool = True,
               showcoloraxes: bool = True,
@@ -361,8 +364,8 @@ def embedding(adata: AnnData,
         Height of figure in pixels.
     subtitles : str | list[str] | None
         List of subtitles to use, color by default.
-    title : str | None
-        Common title for the whole figure.
+    subtitles_font : dict | None
+        Font parameters of subtitles.
     cmap : str | None
         Colormap for continous variables.
     showlegend : bool
@@ -404,7 +407,7 @@ def embedding(adata: AnnData,
     fig = make_subplots(
         rows=rows,
         cols=cols,
-        subplot_titles=list(subtitles) if subtitles is not None else np.repeat(
+        subplot_titles=[subtitles] if isinstance(subtitles, str) else list(subtitles) if subtitles is not None else np.repeat(
             color, len(dimensions)),
         horizontal_spacing=wspace,
         vertical_spacing=hspace,
@@ -458,7 +461,7 @@ def embedding(adata: AnnData,
 
     fig.layout.legend.x = 1.05
 
-    _update_annotations(fig, annotations_font, annotations_outline_width)
+    _update_annotations(fig, annotations_font, annotations_outline_width, subtitles_font)
 
     # Update final layout
     fig.update_layout(
@@ -467,8 +470,7 @@ def embedding(adata: AnnData,
         legend_groupclick="toggleitem",
         margin={"pad": 20},
         width=width,
-        height=height,
-        title=title)
+        height=height)
 
     _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace,
                       showcoloraxes, shared_coloraxes, cmap)
