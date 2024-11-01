@@ -1109,15 +1109,6 @@ def _plot_degs(deg_df: pd.DataFrame, logfc: float = 0.3, pval: float = 0.05,
         line=dict(color="lightgray", width=0.5),
     )
 
-    fig.update_layout(
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.2,
-            xanchor="center",
-            x=0.5,
-        ),
-    )
     return fig
 
 
