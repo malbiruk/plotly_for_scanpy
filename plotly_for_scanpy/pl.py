@@ -3,6 +3,7 @@ This module provides plotting functions for AnnData objects utilizing plotly.
 """
 
 import itertools
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -1059,7 +1060,7 @@ def _process_df_for_volcano(deg_df: pd.DataFrame,
         deg_df = deg_df[(deg_df["LFC"] >= lower_bound) & (deg_df["LFC"] <= upper_bound)]
         n_removed_genes = were_genes - len(deg_df)
         if n_removed_genes != 0:
-            print(f"{n_removed_genes} genes were removed as outliers")
+            logging.warning("%s genes were removed as outliers", n_removed_genes)
 
     deg_df["DEG type"] = deg_df.apply(
         lambda x: "Down-regulated genes"
@@ -1127,9 +1128,9 @@ def volcano(degs_df: pd.DataFrame,
             logfc: float = 0.3,
             pval: float = 0.05,
             *,
-            logfc_col: str = "LFC",
-            padj_col: str = "pval_adj",
-            gene_col: str = "Gene",
+            logfc_col: str = "logfoldchanges",
+            padj_col: str = "pvals_adj",
+            gene_col: str = "names",
             title: str | None = None,
             remove_outliers: bool = True,
             color_discrete_map: dict | None = None,
@@ -1183,7 +1184,7 @@ def volcano(degs_df: pd.DataFrame,
         n_degs = _calculate_n_degs(degs_df, logfc, pval)
         n_genes = len(degs_df)
         degs_percent = round(n_degs / n_genes * 100, 2)
-        title = f"{n_degs} DEGS ({degs_percent}%)"
+        title = f"{n_degs} DEGs ({degs_percent}%)"
     degs_df = _process_df_for_volcano(degs_df, logfc, pval, remove_outliers=remove_outliers)
     fig = _plot_degs(degs_df, logfc, pval, title=title,
                      color_discrete_map=color_discrete_map,
