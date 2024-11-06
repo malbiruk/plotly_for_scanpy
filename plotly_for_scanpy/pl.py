@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import plotly.colors as pc
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -15,7 +16,6 @@ import scipy
 from anndata import AnnData
 from plotly.subplots import make_subplots
 from plotly_for_scanpy import one_light_template  # noqa: F401
-from scipy.sparse import issparse
 
 ERR_MSG_KEY_NOT_FOUND = "Could not find {} in {}."
 ERR_MSG_UNEXPECTED_CATEGORIES = ("The following categories were not found in specified groups: {}\n"
@@ -278,6 +278,16 @@ def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes,
                 fig.layout[f"coloraxis{i}"].colorscale = cmap
 
 
+def _modify_cmap(cmap, zero_color):
+    if zero_color:
+        if cmap:
+            prev_cmap = pc.get_colorscale(cmap) if isinstance(cmap, str) else cmap
+        else:
+            prev_cmap = pio.templates[pio.templates.default].layout.colorscale.sequential
+        return [*[[0, zero_color], [0.00001, prev_cmap[0][1]]], *prev_cmap[1:]]
+    return cmap
+
+
 def embedding(adata: AnnData,
               basis: str,
               *,
@@ -303,7 +313,8 @@ def embedding(adata: AnnData,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
               subtitles_font: dict | None = None,
-              cmap: str | None = None,
+              cmap: str | list[list[int]] | None = None,
+              zero_color: str | None = None,
               showlegend: bool = True,
               showcoloraxes: bool = True,
               return_fig: bool = False,
@@ -368,6 +379,8 @@ def embedding(adata: AnnData,
         Font parameters of subtitles.
     cmap : str | None
         Colormap for continous variables.
+    zero_color : str | None
+        Color to use for 0 values while plotting continous variables.
     showlegend : bool
         Show all legends.
     showcoloraxes : bool
@@ -383,6 +396,8 @@ def embedding(adata: AnnData,
         The figure object if return_fig is True, None otherwise.
     """
     template = template or pio.templates.default
+
+    cmap = _modify_cmap(cmap, zero_color)
 
     # Prepare data
     if isinstance(dimensions, tuple):
