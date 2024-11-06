@@ -315,6 +315,7 @@ def embedding(adata: AnnData,
               subtitles_font: dict | None = None,
               cmap: str | list[list[int]] | None = None,
               zero_color: str | None = None,
+              na_color: str = "lightgray",
               showlegend: bool = True,
               showcoloraxes: bool = True,
               return_fig: bool = False,
@@ -381,6 +382,8 @@ def embedding(adata: AnnData,
         Colormap for continous variables.
     zero_color : str | None
         Color to use for 0 values while plotting continous variables.
+    na_color : str
+        Color to use for NA values.
     showlegend : bool
         Show all legends.
     showcoloraxes : bool
@@ -450,7 +453,7 @@ def embedding(adata: AnnData,
                 opacity=opacity,
                 hover_name=hover_name,
                 hover_data=hover_data,
-                color_discrete_map={"NA": "lightgray"},
+                color_discrete_map={"NA": na_color},
                 category_orders=category_orders)
 
             for trace in px_fig["data"]:
