@@ -326,7 +326,7 @@ def embedding(adata: AnnData,
               annotations_font: dict | None = None,
               annotations_outline_width: int | None = None,
               ncols: int = 3,
-              wspace: float | None = None,
+              wspace: float = 0.1,
               hspace: float = 0.15,
               opacity: float = 1,
               hover_name:  str | pd.Series | None = None,
@@ -426,8 +426,6 @@ def embedding(adata: AnnData,
         The figure object if return_fig is True, None otherwise.
     """
     template = template or pio.templates.default
-    wspace = (0.2 if not wspace and not shared_legends else
-              0.1 if not wspace and shared_legends else wspace)
     cmap = _modify_cmap(cmap, zero_color)
 
     # Prepare data
