@@ -341,7 +341,7 @@ def embedding(adata: AnnData,
               cmap: str | list[list[int]] | None = None,
               zero_color: str | None = None,
               na_color: str = "lightgray",
-              showlegend: bool = True,
+              showlegend: bool | None = None,
               showcoloraxes: bool = True,
               return_fig: bool = False,
               _pca_annotate_variances: bool = False,
@@ -514,6 +514,8 @@ def embedding(adata: AnnData,
                       marker_line=dict(width=marker_edgewidth,
                                        color=marker_edgecolor))
 
+    showlegend = (False if showlegend is None and annotations else
+                  True if showlegend is None and not annotations else showlegend)
     fig.update_layout(
         showlegend=showlegend,
         template=template,
