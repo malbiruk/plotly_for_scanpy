@@ -185,9 +185,13 @@ def _add_trace_to_figure(fig, trace, row, col, counter, color_col, dim_pair,
     """
     Add a trace to the figure with proper formatting.
     """
-    legendgroup_name = f"{color_col} {dim_pair}" if dim_pair != (0, 1) else color_col
+    if not group_legends:
+        trace.update(legend=f"legend{counter + 1}")
+
     fig.add_trace(trace, row=row, col=col)
+
     if group_legends:
+        legendgroup_name = f"{color_col} {dim_pair}" if dim_pair != (0, 1) else color_col
         fig.update_traces(
             legendgrouptitle=dict(text=legendgroup_name),
             legendgroup=legendgroup_name,
@@ -239,7 +243,8 @@ def _update_annotations(fig, annotations_font, annotations_outline_width, subtit
     fig.update_annotations(selector={"name": "annotations"}, font=annotations_font)
 
 
-def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes, shared_coloraxes, cmap):
+def _update_legends(fig, rows, cols, num_plots, hspace, wspace,
+                    showcoloraxes, shared_coloraxes, shared_legends, cmap):
     if shared_coloraxes:
         fig.layout.coloraxis.colorbar.x = 1.05
         fig.layout.legend.x = 1.1
@@ -277,6 +282,25 @@ def _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace, showcoloraxes,
             if cmap:
                 fig.layout[f"coloraxis{i}"].colorscale = cmap
 
+    if shared_legends:
+        fig.update_layout(legend=dict(x=1.05, groupclick="toggleitem"))
+        if shared_coloraxes:
+            fig.update_layout(legend=dict(x=1.12, groupclick="toggleitem"))
+
+    else:
+        for i in range(1, num_plots+1):
+            legend = f"legend{i}"
+            row = (i - 1) // cols  # 0-indexed row position
+            col = (i - 1) % cols   # 0-indexed column position
+            x_position = (col + 1) / cols - (wspace * (cols - col - 1) / cols)
+            y_position = 1 - (row + 0.5) / rows * (1 + hspace) + (hspace / 2)
+            fig.update_layout({
+                legend: dict(
+                    x=x_position,
+                    y=y_position,
+                    yanchor="middle",
+                )})
+
 
 def _modify_cmap(cmap, zero_color):
     if zero_color:
@@ -302,13 +326,14 @@ def embedding(adata: AnnData,
               annotations_font: dict | None = None,
               annotations_outline_width: int | None = None,
               ncols: int = 3,
-              wspace: float = 0.1,
+              wspace: float | None = None,
               hspace: float = 0.15,
               opacity: float = 1,
               hover_name:  str | pd.Series | None = None,
               hover_data: str | list[str] | pd.Series | dict | None = None,
               shared_axes: bool | str = "all",
               shared_coloraxes: bool = False,
+              shared_legends: bool = False,
               width: int | None = None,
               height: int | None = None,
               subtitles: str | list[str] | None = None,
@@ -370,6 +395,8 @@ def embedding(adata: AnnData,
         False: don't share axes.
     shared_coloraxes: bool
         Use the same coloraxes for all subplots.
+    shared_legends: bool
+        Display all legends on the right (using legend groups).
     width : int | None
         Width of figure in pixels.
     height : int | None
@@ -399,7 +426,8 @@ def embedding(adata: AnnData,
         The figure object if return_fig is True, None otherwise.
     """
     template = template or pio.templates.default
-
+    wspace = (0.2 if not wspace and not shared_legends else
+              0.1 if not wspace and shared_legends else wspace)
     cmap = _modify_cmap(cmap, zero_color)
 
     # Prepare data
@@ -417,7 +445,6 @@ def embedding(adata: AnnData,
 
     # Calculate layout
     num_plots = len(color) * len(dimensions)
-    group_legends = num_plots > 1
     cols = min(num_plots, ncols)
     rows = int(np.ceil(num_plots / cols))
 
@@ -460,7 +487,7 @@ def embedding(adata: AnnData,
                 row = (counter // cols) + 1
                 col = (counter % cols) + 1
                 _add_trace_to_figure(fig, trace, row, col, counter,
-                                     color_col, dim_pair, group_legends=group_legends,
+                                     color_col, dim_pair, group_legends=shared_legends,
                                      shared_coloraxes=shared_coloraxes)
 
             if annotations and df_for_plot[color_col].dtype.name == "category":
@@ -477,28 +504,25 @@ def embedding(adata: AnnData,
                 fig.update_yaxes(title_text=y_col, row=row, col=col)
             counter += 1
 
-    fig.layout.legend.x = 1.05
+    # fig.layout.legend.x = 1.05
 
     _update_annotations(fig, annotations_font, annotations_outline_width, subtitles_font)
 
-    # Update final layout
-    fig.update_layout(
-        showlegend=showlegend,
-        template=template,
-        legend_groupclick="toggleitem",
-        margin={"pad": 20},
-        width=width,
-        height=height)
-
-    _update_coloraxes(fig, rows, cols, num_plots, hspace, wspace,
-                      showcoloraxes, shared_coloraxes, cmap)
+    _update_legends(fig, rows, cols, num_plots, hspace, wspace,
+                    showcoloraxes, shared_coloraxes, shared_legends, cmap)
     fig.update_yaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_xaxes(showticklabels=False, zeroline=False, ticks="")
     fig.update_traces(marker_size=marker_size,
                       marker_line=dict(width=marker_edgewidth,
                                        color=marker_edgecolor))
 
-    fig.update_layout(**kwargs)
+    fig.update_layout(
+        showlegend=showlegend,
+        template=template,
+        margin={"pad": 20},
+        width=width,
+        height=height,
+        **kwargs)
 
     if return_fig:
         return fig
