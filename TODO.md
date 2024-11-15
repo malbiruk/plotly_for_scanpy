@@ -1,8 +1,10 @@
 - [ ] add layer to embedding and dotplot
 - [ ] add colorbar options to embedding (vcenter, vmax, vmin)
 - [ ] dotplot: add swap_axes, expression_cutoff, mean_only_expressed, standard_scale, gene_symbols
+- [ ] volcano: make accept same args as sc.get.rank_genes_groups_df and plot subplots if multiple groups
 - [ ] pl.highest_expr_genes (show those genes that yield the highest fraction of counts in each single cell, across all cells)
 - [ ] pl.rank_genes_groups (make horizontal bars)
+- [ ] pl.ridgeline (basically same asw violin)
 - [ ] pl.violin
 - [ ] pl.heatmap
 - [ ] pl.matrixplot

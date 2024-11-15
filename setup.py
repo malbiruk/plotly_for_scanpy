@@ -10,6 +10,7 @@ setup(
         "plotly",
         "dash",
         "anndata",
+        "webcolors",
     ],
     entry_points={},
     description="A custom Plotly-based visualization package for Scanpy",
