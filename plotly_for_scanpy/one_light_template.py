@@ -34,7 +34,7 @@ custom_template.layout.colorway = [
     "sandybrown", "lightcyan", "lightpink", "khaki",
     "mediumaquamarine", "lemonchiffon", "pink", "palevioletred",
     "moccasin", "burlywood", "gainsboro", "rosybrown", "palegoldenrod"]
-custom_template.layout.colorscale = {"sequential": "purpor_r", "diverging": "Tealrose_r"}
+custom_template.layout.colorscale = {"sequential": "purpor", "diverging": "Tealrose_r"}
 # Burg_r
 
 custom_template.layout.coloraxis.colorbar.len = 0.75
