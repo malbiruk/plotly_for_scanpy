@@ -16,14 +16,14 @@ setup(
     description="A custom Plotly-based visualization package for Scanpy",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/plotly_for_scanpy",
-    author="Your Name",
-    author_email="your.email@example.com",
+    url="https://github.com/malbiruk/plotly_for_scanpy",
+    author="Klim Kostiuk",
+    author_email="2601074@gmail.com",
     license="MIT",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.10",
 )
