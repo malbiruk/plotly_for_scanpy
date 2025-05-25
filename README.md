@@ -1,11 +1,11 @@
-# plotly_for_scanpy
+# plotly-for-scanpy
 
 Interactive Plotly-based visualization tools for Scanpy single-cell data analysis, providing drop-in alternatives to scanpy.pl functions with enhanced interactivity.
 
 ## Installation
 
 ```bash
-pip install plotly_for_scanpy
+pip install plotly-for-scanpy
 ```
 
 ## Features
