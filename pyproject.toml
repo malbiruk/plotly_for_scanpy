@@ -1,3 +1,33 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "plotly_for_scanpy"
+version = "0.1.0"
+description = "Plotly-based visualization tools for Scanpy data"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "LICENSE" }
+authors = [{ name = "Klim Kostiuk", email = "2601074@gmail.com" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "plotly>=5.0.0",
+    "dash",
+    "scipy",
+    "anndata",
+    "webcolors",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/plotly_for_scanpy"
+"Bug Tracker" = "https://github.com/yourusername/plotly_for_scanpy/issues"
+"Documentation" = "https://colab.research.google.com/drive/1pHt8m-wIVS2B7aUbjrlsNrNWV2JsEI-E"
