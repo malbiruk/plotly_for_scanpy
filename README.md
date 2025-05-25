@@ -32,7 +32,7 @@ sc.tl.umap(adata)
 sc.tl.leiden(adata)
 
 # Use interactive UMAP visualization
-psc.umap(adata, color=['leiden', 'n_genes_by_counts'])
+psc.umap(adata, color=['leiden'])
 
 # Visualize with dynamic downsampling for large datasets
 fig = psc.umap(adata, color='leiden', return_fig=True)
@@ -44,10 +44,6 @@ dynamic_fig.show()
 
 Full examples and tutorials:
 - [Interactive Colab Demo](https://colab.research.google.com/drive/1pHt8m-wIVS2B7aUbjrlsNrNWV2JsEI-E)
-
-## Roadmap
-
-See our [TODO list](TODO.md) for upcoming features and improvements.
 
 ## License
 
